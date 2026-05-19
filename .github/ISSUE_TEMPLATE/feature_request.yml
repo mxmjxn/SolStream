@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest a new role, OS target, hardware support, etc.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve
+      description: |
+        What pain point or missing capability is this addressing?
+        ("I want X" is fine, but please describe what X enables.)
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed solution
+      description: How would you build / configure this?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which part of SolStream does this affect?
+      options:
+        - Ansible role (one of the existing 10)
+        - New Ansible role
+        - CLI
+        - Web installer
+        - Windows track
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered

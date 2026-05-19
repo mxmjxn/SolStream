@@ -1,5 +1,9 @@
 # SolStream
 
+[![Lint](https://github.com/mxmjxn/SolStream/actions/workflows/lint.yml/badge.svg)](https://github.com/mxmjxn/SolStream/actions/workflows/lint.yml)
+[![Integration](https://github.com/mxmjxn/SolStream/actions/workflows/integration.yml/badge.svg)](https://github.com/mxmjxn/SolStream/actions/workflows/integration.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > Headless game-streaming server, on a fresh Ubuntu install, in about 15 minutes.
 
 SolStream turns a Linux box with an NVIDIA GPU into a Steam Big Picture host you stream to phones, tablets, TVs, and other PCs over LAN or the open internet — via [Sunshine](https://github.com/LizardByte/Sunshine) (host) and [Moonlight](https://moonlight-stream.org/) (clients).

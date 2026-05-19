@@ -1,0 +1,72 @@
+name: Hardware report
+description: Report SolStream working (or not working) on a specific hardware config
+title: "[hardware] "
+labels: ["hardware", "documentation"]
+body:
+  - type: dropdown
+    id: status
+    attributes:
+      label: Does it work?
+      options:
+        - "✅ Yes — fully working"
+        - "🟡 Mostly — some features work, others don't"
+        - "❌ No — install failed or major features broken"
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU model
+      placeholder: "e.g. NVIDIA RTX 4070 Ti Super"
+    validations:
+      required: true
+
+  - type: input
+    id: cpu
+    attributes:
+      label: CPU model
+      placeholder: "e.g. Intel i7-13700K"
+
+  - type: input
+    id: ram
+    attributes:
+      label: RAM
+      placeholder: "e.g. 32 GB"
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "e.g. Ubuntu 24.04.3 LTS"
+    validations:
+      required: true
+
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel
+      placeholder: "e.g. 6.8.0-111-generic"
+
+  - type: dropdown
+    id: secure-boot
+    attributes:
+      label: Secure Boot
+      options:
+        - "Enabled"
+        - "Disabled"
+        - "Unknown / N/A (not UEFI)"
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: |
+        Anything else worth knowing? Stream latency numbers, NVENC encoder
+        results, gotchas you hit, etc.
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: solstream doctor output (optional but appreciated)
+      render: text

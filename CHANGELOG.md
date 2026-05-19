@@ -4,7 +4,7 @@ All notable changes to SolStream are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and SolStream aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it reaches v0.1.0.
 
-## [Unreleased]
+## [0.1.0] — Unreleased (v0.1 release candidate)
 
 ### Added
 
@@ -27,9 +27,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - CI workflows: ansible-lint, ruff, markdown-link-check, CLI unittest, webui unittest, EDID multi-resolution validation, ansible syntax-check, install.sh syntax-check
 - Patches directory holding the gamescope WSI dialog-suppress patch
 
+### Project-meta
+
+- CONTRIBUTING.md with role conventions, coding style, and reporting templates
+- SECURITY.md with disclosure policy and threat model
+- GitHub issue templates: bug_report.yml, feature_request.yml, hardware_report.yml
+- GitHub PR template
+- .github/FUNDING.yml placeholder
+- README status badges for lint + integration CI
+
 ### Known limitations
 
-- v0.1 supports Ubuntu 24.04 + NVIDIA Ampere/Ada only. Other targets are planned.
-- Windows host support is design-doc only — `windows/` directory has scope, no code yet.
+- v0.1 supports Ubuntu 24.04 + NVIDIA Ampere/Ada only on Linux. Other targets are planned.
+- Windows host support is scaffolding-level (working PowerShell installer + doctor, no real-hardware testing yet).
 - GPU-passthrough testing in CI isn't possible on the free GitHub Actions tier; we test apt resolution + playbook syntax + EDID generation, but not driver loading + actual streaming.
 - The web installer is single-user / single-job — no persistence across restarts.

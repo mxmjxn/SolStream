@@ -1,0 +1,83 @@
+name: Bug report
+description: Something broke during install, on the streaming server, or on the client
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: textarea
+    id: symptom
+    attributes:
+      label: What broke
+      description: |
+        Concise description. What did you expect? What actually happened?
+      placeholder: |
+        Expected: Steam Big Picture to render on the streamed display.
+        Actual: black screen with the Moonlight overlay, no Steam window visible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `solstream doctor --verbose`
+      description: Paste the full output (or attach a file).
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: System info
+      description: |
+        Run these and paste the output:
+        ```
+        uname -a
+        lsb_release -a
+        nvidia-smi
+        gamescope --version 2>&1 | head -1
+        sunshine --version 2>&1 | head -3
+        ```
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Service logs
+      description: |
+        Run:
+        ```
+        journalctl --user -u gamescope-sunshine.service --since "1 hour ago"
+        ```
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Fresh Ubuntu 24.04 install
+        2. Ran `curl -fsSL https://.../install.sh | sudo bash`
+        3. Walked through the wizard, picked defaults
+        4. After reboot, opened Sunshine UI in browser
+        5. Symptom appeared
+    validations:
+      required: true
+
+  - type: input
+    id: client
+    attributes:
+      label: Moonlight client
+      placeholder: "e.g. Moonlight PC 6.2.0 on Windows 11, or Shield TV with Moonlight Android 12.1"
+
+  - type: checkboxes
+    id: already-checked
+    attributes:
+      label: Sanity checks
+      options:
+        - label: I've read `docs/troubleshooting.md` and my symptom isn't there
+        - label: `solstream doctor` reports some red items
+        - label: This is reproducible (not a one-off)
