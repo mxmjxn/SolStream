@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% set step = 2 %}
+{% block content %}
+
+<form action="/review" method="post">
+
+  <div class="panel">
+    <h2>Stream profile</h2>
+    <p style="color: var(--muted); font-size: 13px;">
+      The synthetic monitor and gamescope will be configured at this resolution
+      and refresh rate. Clients can stream at lower resolutions; Sunshine downscales.
+    </p>
+
+    <div class="row">
+      <div>
+        <label for="resolution">Resolution</label>
+        <select name="resolution" id="resolution">
+          <option value="2560x1440" selected>2560 × 1440 (QHD)</option>
+          <option value="1920x1080">1920 × 1080 (FHD)</option>
+          <option value="3840x2160">3840 × 2160 (4K)</option>
+        </select>
+      </div>
+      <div>
+        <label for="refresh">Refresh rate</label>
+        <select name="refresh" id="refresh">
+          <option value="120" selected>120 Hz</option>
+          <option value="60">60 Hz</option>
+          <option value="144">144 Hz</option>
+          <option value="240">240 Hz</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="nvenc_preset">NVENC preset</label>
+    <select name="nvenc_preset" id="nvenc_preset">
+      <option value="1">P1 — Slowest / highest quality</option>
+      <option value="3">P3 — Slow / balanced</option>
+      <option value="4" selected>P4 — Balanced (recommended for streaming)</option>
+      <option value="5">P5 — Fast / lower quality</option>
+      <option value="7">P7 — Fastest / lowest quality</option>
+    </select>
+  </div>
+
+  <div class="panel">
+    <h2>Storage</h2>
+    <label for="steam_library">Steam library path</label>
+    <input type="text" name="steam_library" id="steam_library"
+           value="/data/downloads/steamlibrary">
+    <p style="color: var(--muted); font-size: 13px;">
+      Where Steam will install games. Point at your largest fast volume —
+      should be on NVMe / SATA SSD for acceptable load times.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>Remote streaming (optional)</h2>
+    <div class="checkbox-row">
+      <input type="checkbox" name="enable_wireguard" id="enable_wireguard" value="true">
+      <label for="enable_wireguard">Set up WireGuard for streaming over the internet</label>
+    </div>
+
+    <label for="wg_easy_password_hash">wg-easy admin password (bcrypt hash)</label>
+    <input type="text" name="wg_easy_password_hash" id="wg_easy_password_hash"
+           placeholder="generate via: htpasswd -nBC 10 ''">
+
+    <div class="row" style="margin-top: 12px;">
+      <div>
+        <label for="ddns_provider">DDNS provider</label>
+        <select name="ddns_provider" id="ddns_provider">
+          <option value="">(none — use static IP)</option>
+          <option value="duckdns">DuckDNS</option>
+        </select>
+      </div>
+      <div>
+        <label for="ddns_subdomain">DDNS subdomain</label>
+        <input type="text" name="ddns_subdomain" id="ddns_subdomain" placeholder="mybox">
+      </div>
+    </div>
+    <label for="ddns_token">DDNS provider token</label>
+    <input type="password" name="ddns_token" id="ddns_token"
+           placeholder="Get from duckdns.org / cloudflare / etc.">
+    <p style="color: var(--muted); font-size: 13px;">
+      You also need to forward UDP 51820 on your router. See the
+      <a href="https://github.com/mxmjxn/SolStream/blob/main/docs/router-setup.md">router setup docs</a>.
+    </p>
+  </div>
+
+  <div class="nav">
+    <a href="/" class="secondary"><button type="button" class="secondary">← Back</button></a>
+    <button type="submit">Review →</button>
+  </div>
+</form>
+
+{% endblock %}

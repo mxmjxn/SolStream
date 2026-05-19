@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% set step = 4 %}
+{% block content %}
+
+<div class="panel">
+  <h2>Installing…</h2>
+  <p style="color: var(--muted);">
+    Job <code id="job-id"></code> — watch the log stream below.
+    Do not close this window.
+  </p>
+  <pre id="log"></pre>
+  <p id="status">Running…</p>
+</div>
+
+<div class="nav">
+  <span></span>
+  <a id="done-link" href="/done" style="display:none">
+    <button type="button">View final URLs →</button>
+  </a>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const jobId = params.get('job_id');
+document.getElementById('job-id').textContent = jobId;
+const logEl = document.getElementById('log');
+const statusEl = document.getElementById('status');
+
+const sse = new EventSource(`/install/log/${jobId}`);
+sse.onmessage = (ev) => {
+  const msg = JSON.parse(ev.data);
+  if (msg.line) {
+    logEl.textContent += msg.line;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  if (msg.done) {
+    sse.close();
+    if (msg.status === 'succeeded') {
+      statusEl.innerHTML = '<span class="success">✓ Install succeeded</span>';
+      document.getElementById('done-link').style.display = 'inline';
+    } else {
+      statusEl.innerHTML = '<span class="error">✗ Install failed — see log above and docs/troubleshooting.md</span>';
+    }
+  }
+};
+sse.onerror = () => {
+  statusEl.innerHTML = '<span class="error">Log connection lost. Refresh to reconnect.</span>';
+};
+</script>
+
+{% endblock %}

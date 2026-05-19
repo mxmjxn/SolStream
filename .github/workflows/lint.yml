@@ -50,6 +50,17 @@ jobs:
         working-directory: cli
         run: PYTHONPATH=. python -m unittest discover tests/
 
+  webui-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run solstream-webui detect tests
+        working-directory: webui
+        run: PYTHONPATH=. python -m unittest discover tests/
+
   edid-generator-tests:
     runs-on: ubuntu-latest
     steps:

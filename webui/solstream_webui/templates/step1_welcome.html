@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% set step = 1 %}
+{% block content %}
+
+<div class="panel">
+  <h2>Detected hardware</h2>
+  <dl class="kv">
+    <dt>Hostname</dt>            <dd>{{ hardware.hostname }}</dd>
+    <dt>LAN IP</dt>              <dd>{{ hardware.lan_ip }}</dd>
+    <dt>Operating system</dt>    <dd>{{ hardware.os }}</dd>
+    <dt>Kernel</dt>              <dd>{{ hardware.kernel }}</dd>
+    <dt>CPU</dt>                 <dd>{{ hardware.cpu }}</dd>
+    <dt>Memory</dt>              <dd>{{ hardware.memory_gb }} GB</dd>
+    <dt>GPU</dt>                 <dd>{{ hardware.gpu.vendor }} &mdash; {{ hardware.gpu.model }}</dd>
+    <dt>Secure Boot</dt>         <dd>{{ hardware.secure_boot }}</dd>
+  </dl>
+
+  {% if hardware.gpu.vendor != "NVIDIA" %}
+    <p class="error">
+      ⚠ No NVIDIA GPU detected. SolStream v0.1 requires an NVIDIA Ampere
+      (RTX 30-series) or newer GPU. See
+      <a href="https://github.com/mxmjxn/SolStream/blob/main/docs/hardware-support.md">hardware support docs</a>.
+    </p>
+  {% endif %}
+
+  {% if hardware.disks %}
+    <p style="color: var(--muted); font-size: 13px;">
+      Detected /data mounts (candidate Steam library locations):
+    </p>
+    <ul>
+    {% for d in hardware.disks %}
+      <li><code>{{ d.mount }}</code> — {{ d.size }} ({{ d.avail }} free)</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>What will happen</h2>
+  <p>The installer will:</p>
+  <ol>
+    <li>Install NVIDIA driver (Secure-Boot aware) and required libraries</li>
+    <li>Generate a synthetic 1440p120 EDID and update GRUB so a virtual monitor appears on DP-1</li>
+    <li>Build gamescope + wayland 1.23 from source (~10 minutes)</li>
+    <li>Install Steam, Sunshine, PipeWire and the supporting wrapper script</li>
+    <li>(Optional) Set up WireGuard via wg-easy for remote streaming</li>
+  </ol>
+  <p>You'll need to reboot once after step 2. The wizard will tell you when.</p>
+
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <form action="/config" method="post" class="nav">
+    <span></span>
+    <span>
+      <input type="hidden" name="confirm" value="yes">
+      <button type="submit" {% if hardware.gpu.vendor != "NVIDIA" %}disabled{% endif %}>
+        Continue →
+      </button>
+    </span>
+  </form>
+</div>
+
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% set step = 3 %}
+{% block content %}
+
+<div class="panel">
+  <h2>Review your selections</h2>
+  <dl class="kv">
+    <dt>Resolution</dt>          <dd>{{ config.width }} × {{ config.height }}</dd>
+    <dt>Refresh rate</dt>        <dd>{{ config.refresh }} Hz</dd>
+    <dt>NVENC preset</dt>        <dd>P{{ config.nvenc_preset }}</dd>
+    <dt>Steam library</dt>       <dd><code>{{ config.steam_library }}</code></dd>
+    <dt>Remote streaming</dt>    <dd>{{ "yes" if config.enable_wireguard else "no" }}</dd>
+    {% if config.enable_wireguard %}
+      <dt>DDNS provider</dt>     <dd>{{ config.ddns_provider or "(none)" }}</dd>
+      {% if config.ddns_subdomain %}
+      <dt>DDNS subdomain</dt>    <dd>{{ config.ddns_subdomain }}</dd>
+      {% endif %}
+    {% endif %}
+  </dl>
+</div>
+
+<div class="panel">
+  <h2>About to run</h2>
+  <ol>
+    <li>Install NVIDIA driver (Secure Boot: <strong>{{ hardware.secure_boot }}</strong>)</li>
+    <li>Configure synthetic display on DP-1</li>
+    <li>Build gamescope + wayland from source</li>
+    <li>Install Steam + i386 multiarch</li>
+    <li>Install Sunshine + PipeWire</li>
+    <li>Install session wrapper + systemd unit</li>
+    {% if config.enable_wireguard %}
+    <li>Start wg-easy + DDNS containers</li>
+    {% endif %}
+    <li>Write URLs file + MOTD</li>
+  </ol>
+
+  <p style="color: var(--muted); font-size: 13px;">
+    Estimated time: <strong>10–15 minutes</strong>. The progress will stream live;
+    you can watch but don't have to.
+  </p>
+</div>
+
+<form action="/install/start" method="post" id="install-form">
+  <input type="hidden" name="config_json" value='{{ config_json | safe }}'>
+  <div class="nav">
+    <a href="javascript:history.back()"><button type="button" class="secondary">← Back</button></a>
+    <button type="submit" id="install-btn">Install now ⚙</button>
+  </div>
+</form>
+
+<script>
+  document.getElementById('install-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const res = await fetch('/install/start', { method: 'POST', body: data });
+    const { job_id } = await res.json();
+    window.location.href = `/install/watch?job_id=${job_id}`;
+  });
+</script>
+
+{% endblock %}

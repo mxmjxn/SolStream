@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SolStream Installer{% block title %}{% endblock %}</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a212b;
+      --border: #2a3340;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #ffa657;
+      --accent-dim: #c87530;
+      --success: #3fb950;
+      --danger: #f85149;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 32px 24px; }
+    .logo { font-size: 28px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+    .subtitle { color: var(--muted); margin-bottom: 32px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .panel h2 { margin-top: 0; font-size: 18px; }
+    label { display: block; margin: 12px 0 4px; font-weight: 600; }
+    input[type=text], input[type=number], input[type=password], select {
+      width: 100%; padding: 8px 10px;
+      background: #0d1116; color: var(--text);
+      border: 1px solid var(--border); border-radius: 4px;
+      font: inherit;
+    }
+    input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .row { display: flex; gap: 12px; }
+    .row > * { flex: 1; }
+    button {
+      background: var(--accent);
+      color: #0f1419;
+      font: 600 14px/1 -apple-system, sans-serif;
+      padding: 10px 18px;
+      border: 0;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover { background: var(--accent-dim); }
+    button.secondary { background: var(--border); color: var(--text); }
+    .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; }
+    .nav { margin-top: 24px; display: flex; justify-content: space-between; }
+    .error { color: var(--danger); margin: 12px 0; }
+    .success { color: var(--success); margin: 12px 0; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
+    pre {
+      background: #0d1116;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 12px;
+      max-height: 480px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .steps { display: flex; gap: 4px; margin-bottom: 24px; font-size: 13px; }
+    .step { flex: 1; padding: 8px; text-align: center; border-radius: 4px; color: var(--muted); background: var(--panel); }
+    .step.current { background: var(--accent); color: #0f1419; font-weight: 600; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+    .checkbox-row input { width: auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">☀ SolStream</div>
+    <div class="subtitle">Headless game-streaming server installer</div>
+
+    <div class="steps">
+      <div class="step {% if step == 1 %}current{% endif %}">1. Welcome</div>
+      <div class="step {% if step == 2 %}current{% endif %}">2. Config</div>
+      <div class="step {% if step == 3 %}current{% endif %}">3. Review</div>
+      <div class="step {% if step == 4 %}current{% endif %}">4. Install</div>
+      <div class="step {% if step == 5 %}current{% endif %}">5. Done</div>
+    </div>
+
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

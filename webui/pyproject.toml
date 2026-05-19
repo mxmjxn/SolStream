@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "solstream-webui"
+version = "0.0.1"
+description = "Web-based wizard for installing SolStream"
+readme = "README.md"
+authors = [{name = "Maxim Jackson", email = "maxim.jackson@live.com"}]
+license = {file = "../LICENSE"}
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.30",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+solstream-webui = "solstream_webui.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["solstream_webui*"]
+
+[tool.setuptools.package-data]
+solstream_webui = ["templates/*.html", "static/*"]

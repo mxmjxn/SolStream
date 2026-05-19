@@ -55,10 +55,10 @@ The full list of foot-guns documented and pre-solved is in [`docs/troubleshootin
 ### 🎯 Quickstart A — One command (recommended for new users)
 
 ```bash
-curl -fsSL https://solstream.dev/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mxmjxn/SolStream/main/webui/install.sh | sudo bash
 ```
 
-The bootstrap script starts a temporary web UI on port `8080` of the target machine. Open it from any browser on your LAN, click through the wizard, and the install runs while you watch. ~10 minutes on a typical box.
+The bootstrap script installs minimal apt dependencies, clones the repo to `/opt/solstream`, sets up a Python venv, then launches the web installer on port `8080`. Open `http://<your-host-ip>:8080` from any browser on your LAN, click through the wizard, and the install runs while you watch. ~10 minutes on a typical box.
 
 ### Quickstart B — CLI (for power users / scripting)
 

@@ -1,8 +1,26 @@
 # SolStream web installer
 
-> **Phase 3 of the project plan — not yet implemented.**
+The one-command install path. Designed for users who don't know Ansible and don't want to.
 
-This directory will hold the one-command web installer: a small Python app you launch via `curl | sudo bash`, which then starts a temporary HTTP server on the target host. You open it from any browser on your LAN and click through an install wizard.
+## How it works
+
+```
+┌───────────────────┐  curl | bash   ┌──────────────────────────┐
+│  User's laptop    │ ─────────────► │  Target SolStream host   │
+│  (just a browser) │                │                          │
+│                   │                │  install.sh:             │
+│   ┌─────────────┐ │                │  • apt-get python+ansible│
+│   │  Browser    │ │ ──────HTTP───► │  • git clone /opt/sol... │
+│   │  192.168... │ │     :8080      │  • pip install webui     │
+│   └─────────────┘ │                │  • launch solstream-webui│
+└───────────────────┘                │  • serve wizard on :8080 │
+                                     │                          │
+                                     │  After wizard finishes:  │
+                                     │  • ansible-playbook runs │
+                                     │  • progress streams back │
+                                     │  • final URLs displayed  │
+                                     └──────────────────────────┘
+```
 
 ## Why a web installer instead of a desktop GUI
 
@@ -14,34 +32,57 @@ A desktop GUI assumes the install target already has a working display server an
 - Naturally supports remote VPS / cloud installs
 - Shares the same Ansible playbook as the CLI — no duplicated logic
 
-## Planned UX
+## Architecture
+
+- **Backend:** FastAPI + uvicorn (Python, lightweight)
+- **Frontend:** Server-side rendered HTML with a small bit of vanilla JS for the live log stream; deliberately no React/Vue
+- **Live progress:** Server-Sent Events streaming Ansible's stdout/stderr
+- **Hardware detection:** runs at first page load; pre-fills sensible defaults
+- **State:** in-memory per-process — the wizard is single-user and short-lived
+
+## Files
 
 ```
-$ curl -fsSL https://solstream.dev/install.sh | sudo bash
-
-SolStream web installer running at:
-  http://192.168.1.20:8080
-
-(Open that URL from any device on your network to continue.)
+webui/
+├── install.sh                  # `curl | sudo bash` bootstrap
+├── pyproject.toml              # Python packaging
+└── solstream_webui/
+    ├── __init__.py
+    ├── __main__.py             # `solstream-webui` entrypoint
+    ├── app.py                  # FastAPI application + routes
+    ├── detect.py               # Hardware/OS/network probes
+    ├── templates/
+    │   ├── base.html
+    │   ├── step1_welcome.html
+    │   ├── step2_config.html
+    │   ├── step3_review.html
+    │   ├── step4_install.html
+    │   └── step5_done.html
+    └── static/
 ```
 
-Browser flow:
+## Running locally for development
 
-1. **Welcome / hardware detection** — auto-detects GPU, kernel, distro, Secure Boot state
-2. **Stream profile** — resolution, refresh, encoder preset (P4 default)
-3. **Storage** — Steam library path
-4. **Remote streaming (optional)** — WireGuard setup, DDNS provider
-5. **Review & install** — shows generated inventory, runs the playbook with live log streaming
-6. **Done** — final URL list (Sunshine, wg-easy, status page), copy buttons, "next steps" links
+```bash
+cd webui
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .                # install in editable mode
+solstream-webui --port 8080
+```
 
-## Implementation plan
+Then open `http://localhost:8080`.
 
-- **Backend:** FastAPI or Starlette (Python, lightweight)
-- **Frontend:** Server-side rendered HTML + small bit of HTMX for live progress; deliberately no React/Vue bloat
-- **Logs:** WebSocket streaming Ansible's stdout/stderr live
-- **State:** Single JSON file under `/etc/solstream/install-state.json` — survives the installer process exiting
-- **Self-bootstrapping:** the `install.sh` shim curls a tiny Python wheel, pip-installs it into a venv, runs `solstream webui` which serves on `:8080`
+## Tests
 
-## Why this is a Phase 3 deliverable
+```bash
+cd webui
+PYTHONPATH=. python3 -m unittest discover tests/
+```
 
-Phase 1 (Ansible roles) needs to be solid first. The web installer is a UI over the playbook — if the underlying install logic is buggy, a pretty wizard makes it worse, not better. Get the install right, then layer the wizard on top.
+## TODO
+
+- Persist install state to `/etc/solstream/install-state.json` so a power-loss mid-install can be resumed
+- Add a "skip" path for users with a pre-existing Steam install
+- Sign / verify the install.sh against a public key so `curl | bash` is auditable
+- Localization (English-only at v0.1)

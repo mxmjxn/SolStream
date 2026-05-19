@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% set step = 5 %}
+{% block content %}
+
+<div class="panel">
+  <h2>🎉 Install complete</h2>
+  <p>SolStream is up and ready to stream. Here's where everything lives:</p>
+
+  <dl class="kv">
+    <dt>Sunshine pairing UI</dt>
+    <dd><a href="{{ urls.sunshine_web_ui }}">{{ urls.sunshine_web_ui }}</a></dd>
+    {% if urls.wg_easy_admin %}
+    <dt>WireGuard admin</dt>
+    <dd><a href="{{ urls.wg_easy_admin }}">{{ urls.wg_easy_admin }}</a></dd>
+    {% endif %}
+    <dt>SSH</dt>
+    <dd><code>{{ urls.ssh }}</code></dd>
+    <dt>LAN IP</dt>
+    <dd><code>{{ urls.lan_ip }}</code></dd>
+  </dl>
+</div>
+
+<div class="panel">
+  <h2>Next steps</h2>
+  <ol>
+    <li>
+      <strong>Open the Sunshine UI</strong> at the URL above. Set an admin
+      username and password. Your browser will warn about a self-signed
+      certificate — that's expected; proceed past it.
+    </li>
+    <li>
+      <strong>Install a Moonlight client</strong> on the device you want to
+      stream to. Recommended clients: NVIDIA Shield TV, Apple TV 4K, any PC.
+      Get it at <a href="https://moonlight-stream.org/">moonlight-stream.org</a>.
+    </li>
+    <li>
+      <strong>Pair</strong>: in Moonlight, add this host (LAN IP above);
+      Moonlight shows a PIN; enter the PIN in the Sunshine UI's "PIN" tab.
+    </li>
+    <li>
+      <strong>Launch "Steam Big Picture"</strong> from Moonlight to start streaming.
+    </li>
+  </ol>
+
+  <p style="color: var(--muted); font-size: 13px;">
+    First-launch: Steam will need to download its runtime (~500 MB) on the
+    host. This happens automatically — give it a couple of minutes after
+    the first stream connects.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>Diagnostics</h2>
+  <p>
+    From an SSH session on the host:
+    <code>solstream status</code>, <code>solstream doctor</code>,
+    or <code>solstream metrics 60</code> during a stream.
+  </p>
+</div>
+
+{% endblock %}
