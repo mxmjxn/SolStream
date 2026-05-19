@@ -1,0 +1,36 @@
+---
+# Copy to inventory/hosts.yml and edit for your environment.
+
+all:
+  vars:
+    # Ansible connection settings — edit for your SSH setup
+    ansible_user: streamer
+    ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+    ansible_become_method: sudo
+
+  children:
+    solstream_hosts:
+      hosts:
+        my-streaming-box:
+          ansible_host: 192.168.1.20
+          ansible_port: 22
+
+          # The streaming user (must already exist; created by your usual user-management).
+          solstream_user: streamer
+
+          # Resolution + refresh — pick what matches your client.
+          # If you have a mix of clients (e.g. 4K TV + 1080p phone), set this to
+          # the maximum and let clients downscale via Moonlight's settings.
+          solstream_resolution_width: 2560
+          solstream_resolution_height: 1440
+          solstream_refresh_hz: 120
+
+          # Steam library path — point at your largest fast volume.
+          solstream_steam_library: /data/downloads/steamlibrary
+
+          # Remote streaming via WireGuard (optional)
+          solstream_enable_wireguard: true
+          solstream_wg_easy_password_hash: "$2b$10$REPLACE_ME"   # htpasswd -nBC 10 ""
+          solstream_ddns_provider: duckdns
+          solstream_ddns_subdomain: my-streaming-box
+          solstream_ddns_token: "REPLACE_ME"

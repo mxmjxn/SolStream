@@ -1,0 +1,95 @@
+---
+# SolStream — full installer playbook
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.yml solstream.yml
+#
+# Selective application:
+#   ansible-playbook -i inventory/hosts.yml solstream.yml --tags nvidia,gamescope
+#
+# Skip dangerous tasks during development:
+#   ansible-playbook -i inventory/hosts.yml solstream.yml --skip-tags reboot
+
+- name: SolStream — headless game-streaming server install
+  hosts: solstream_hosts
+  become: true
+  gather_facts: true
+
+  vars:
+    # ────────────── Defaults, override in inventory or via -e ──────────────
+    # Streaming target user (will own the gamescope-sunshine session).
+    # Must already exist as a Linux user before running this playbook.
+    solstream_user: "{{ ansible_user_id | default('streamer') }}"
+
+    # Stream profile — gamescope will run at this resolution/refresh, EDID
+    # will advertise it as the virtual monitor's native mode.
+    solstream_resolution_width: 2560
+    solstream_resolution_height: 1440
+    solstream_refresh_hz: 120
+
+    # Pinned upstream versions. These get bumped together via release PRs.
+    solstream_gamescope_tag: "3.16.23"
+    solstream_wayland_tag: "1.23.1"
+    solstream_sunshine_version: "v2025.924.154138"
+    solstream_nvidia_branch: "580"           # bump as Ubuntu's noble-updates ships new ones
+
+    # Steam library install location. Should be on the largest fast volume.
+    solstream_steam_library: "/data/downloads/steamlibrary"
+
+    # Encoder tuning (passed into sunshine.conf template)
+    solstream_nvenc_preset: 4                # P4 = balanced quality/latency
+    solstream_nvenc_twopass: "disabled"      # disabled for lowest latency
+    solstream_hevc_mode: 3                   # 10-bit HEVC when client supports it
+
+    # WireGuard / remote streaming — opt in by setting in inventory
+    solstream_enable_wireguard: false
+    solstream_wg_easy_password_hash: ""      # generate with htpasswd -nBC 10 ""
+
+    # DDNS — only if solstream_enable_wireguard is true
+    solstream_ddns_provider: ""              # "duckdns" | "cloudflare" | "" (disabled)
+    solstream_ddns_token: ""                 # provider-specific secret
+    solstream_ddns_subdomain: ""             # e.g. "mybox" for mybox.duckdns.org
+
+  pre_tasks:
+    - name: Refuse to run on unsupported OS
+      ansible.builtin.fail:
+        msg: >
+          SolStream v0.1 supports Ubuntu 24.04 only.
+          Detected: {{ ansible_distribution }} {{ ansible_distribution_version }}.
+          See docs/hardware-support.md for the roadmap.
+      when: not (ansible_distribution == 'Ubuntu' and ansible_distribution_version is version('24.04', '>='))
+
+    - name: Verify NVIDIA GPU present
+      ansible.builtin.command: lspci -nn
+      register: lspci_out
+      changed_when: false
+
+    - name: Refuse to run without an NVIDIA GPU
+      ansible.builtin.fail:
+        msg: |
+          No NVIDIA GPU detected via lspci. SolStream v0.1 requires an
+          NVIDIA Ampere or newer GPU. See docs/hardware-support.md.
+      when: "'NVIDIA' not in lspci_out.stdout"
+
+  roles:
+    - role: nvidia-driver
+      tags: [nvidia, driver]
+    - role: kernel-modeset
+      tags: [kernel, edid]
+    - role: gamescope-build
+      tags: [gamescope, build]
+    - role: steam
+      tags: [steam]
+    - role: sunshine
+      tags: [sunshine]
+    - role: pipewire-session
+      tags: [audio, pipewire]
+    - role: session-wrapper
+      tags: [wrapper, systemd]
+    - role: wireguard
+      tags: [wireguard, remote]
+      when: solstream_enable_wireguard | bool
+    - role: discoverability
+      tags: [discoverability]
+    - role: doctor
+      tags: [doctor, never]   # run only with --tags doctor

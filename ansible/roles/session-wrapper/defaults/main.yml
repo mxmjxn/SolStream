@@ -1,0 +1,19 @@
+---
+# Defaults for the session-wrapper role.
+# These pull from the playbook-level vars but can be overridden per-host.
+
+solstream_user: "{{ solstream_user }}"
+
+# Resolution gamescope drives DP-1 at (matches the EDID we generated).
+gamescope_width: "{{ solstream_resolution_width | default(2560) }}"
+gamescope_height: "{{ solstream_resolution_height | default(1440) }}"
+gamescope_refresh: "{{ solstream_refresh_hz | default(120) }}"
+
+# Path to where the wrapper script + systemd unit live on the host.
+solstream_session_script: /usr/local/bin/solstream-session.sh
+solstream_systemd_unit_dir: "/home/{{ solstream_user }}/.config/systemd/user"
+solstream_systemd_unit_name: gamescope-sunshine.service
+
+# Vulkan layers we disable to avoid the WSI 'Hooking has failed' modal.
+# Comma-separated, no spaces.
+solstream_vk_layers_disable: "VK_LAYER_NV_optimus,VK_LAYER_NV_present,VK_LAYER_INTEL_nullhw"

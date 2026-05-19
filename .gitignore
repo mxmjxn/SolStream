@@ -1,0 +1,34 @@
+# Inventory + secrets — never commit real ones
+ansible/inventory/hosts.yml
+ansible/inventory/*.vault
+ansible/*.retry
+ansible/.vault_pass*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+*.whl
+
+# Editor / OS junk
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Test artifacts
+tests/vagrant/.vagrant/
+tests/vagrant/*.log
+.terraform/
+*.tfstate*
+
+# Local notes / scratchpad — keep these out
+SCRATCH.md
+TODO.md
+.solstream-dev-notes/

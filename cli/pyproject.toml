@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "solstream"
+version = "0.0.1"
+description = "Headless game-streaming server installer + diagnostics"
+readme = "../README.md"
+authors = [{name = "Maxim Jackson", email = "maxim.jackson@live.com"}]
+license = {file = "../LICENSE"}
+requires-python = ">=3.10"
+keywords = ["sunshine", "moonlight", "gamescope", "steam", "streaming", "homelab"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Installation/Setup",
+]
+dependencies = [
+    "ansible-core>=2.14",
+]
+
+[project.scripts]
+solstream = "solstream.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/mxmjxn/SolStream"
+Issues = "https://github.com/mxmjxn/SolStream/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["solstream*"]

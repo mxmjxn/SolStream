@@ -1,0 +1,70 @@
+---
+# session-wrapper role
+# Installs the inner-cmd wrapper script and the user systemd unit that
+# owns the streaming session.
+
+- name: Install solstream-session.sh wrapper
+  ansible.builtin.template:
+    src: solstream-session.sh.j2
+    dest: "{{ solstream_session_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Ensure user systemd-unit directory exists
+  ansible.builtin.file:
+    path: "{{ solstream_systemd_unit_dir }}"
+    state: directory
+    owner: "{{ solstream_user }}"
+    group: "{{ solstream_user }}"
+    mode: "0755"
+  become: true
+
+- name: Install gamescope-sunshine systemd user unit
+  ansible.builtin.template:
+    src: gamescope-sunshine.service.j2
+    dest: "{{ solstream_systemd_unit_dir }}/{{ solstream_systemd_unit_name }}"
+    owner: "{{ solstream_user }}"
+    group: "{{ solstream_user }}"
+    mode: "0644"
+  become: true
+  notify: reload-user-systemd
+
+- name: Enable user systemd lingering (so the unit persists past logout)
+  ansible.builtin.command: loginctl enable-linger {{ solstream_user }}
+  args:
+    creates: "/var/lib/systemd/linger/{{ solstream_user }}"
+  become: true
+
+- name: Add streaming user to input, render, video groups
+  ansible.builtin.user:
+    name: "{{ solstream_user }}"
+    groups: input,render,video
+    append: true
+  become: true
+
+- name: Ensure pulseaudio-utils is installed (pactl needed by the wrapper)
+  ansible.builtin.apt:
+    name: pulseaudio-utils
+    state: present
+    update_cache: false
+  become: true
+
+# Flush handlers so the daemon-reload happens before we try to enable the unit
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the gamescope-sunshine user service
+  ansible.builtin.systemd:
+    name: "{{ solstream_systemd_unit_name }}"
+    scope: user
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  become_user: "{{ solstream_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ solstream_user_uid.stdout }}"
+  vars:
+    solstream_user_uid: "{{ lookup('pipe', 'id -u ' + solstream_user) }}"

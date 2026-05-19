@@ -1,0 +1,79 @@
+---
+# nvidia-driver role
+#
+# Goal: leave nvidia-smi reporting the GPU, with Secure Boot-compatible
+# kernel modules loadable across the kernels currently installed.
+
+- name: Detect Secure Boot state
+  ansible.builtin.command: mokutil --sb-state
+  register: solstream_sb_state
+  changed_when: false
+  failed_when: false
+
+- name: Decide module-loading strategy based on Secure Boot
+  ansible.builtin.set_fact:
+    solstream_use_signed_modules: "{{ 'enabled' in (solstream_sb_state.stdout | default('')) | lower }}"
+
+- name: Show chosen strategy
+  ansible.builtin.debug:
+    msg: >
+      Secure Boot is {{ 'ENABLED — using Canonical-signed precompiled modules'
+                        if solstream_use_signed_modules
+                        else 'DISABLED — DKMS modules acceptable' }}.
+
+- name: Ensure apt cache is fresh
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+# Path A: Signed precompiled modules (Secure Boot on)
+- name: Install signed precompiled NVIDIA kernel modules for the running kernel
+  ansible.builtin.apt:
+    name:
+      - "linux-modules-nvidia-{{ solstream_nvidia_branch }}-open-{{ ansible_kernel }}"
+      - "libnvidia-encode-{{ solstream_nvidia_branch }}"
+      - "libnvidia-decode-{{ solstream_nvidia_branch }}"
+      - "libnvidia-fbc1-{{ solstream_nvidia_branch }}"
+      - "libnvidia-gl-{{ solstream_nvidia_branch }}"
+      - "libnvidia-egl-wayland1"
+      - "nvidia-utils-{{ solstream_nvidia_branch }}"
+      - "vulkan-tools"
+      - "libvulkan1"
+      - "mesa-vulkan-drivers"
+    state: present
+  become: true
+  when: solstream_use_signed_modules
+
+# Path B: DKMS-built modules (Secure Boot off)
+- name: Install DKMS-built NVIDIA driver
+  ansible.builtin.apt:
+    name:
+      - "nvidia-driver-{{ solstream_nvidia_branch }}-open"
+      - "libnvidia-encode-{{ solstream_nvidia_branch }}"
+      - "libnvidia-decode-{{ solstream_nvidia_branch }}"
+      - "libnvidia-fbc1-{{ solstream_nvidia_branch }}"
+      - "libnvidia-egl-wayland1"
+      - "vulkan-tools"
+      - "libvulkan1"
+      - "mesa-vulkan-drivers"
+    state: present
+  become: true
+  when: not solstream_use_signed_modules
+
+- name: Verify NVIDIA driver is loadable
+  ansible.builtin.command: modinfo nvidia
+  register: solstream_modinfo
+  changed_when: false
+  failed_when: solstream_modinfo.rc != 0
+
+- name: Refuse if Secure Boot is enabled and modules are not signed by Canonical
+  ansible.builtin.fail:
+    msg: |
+      Secure Boot is enabled but the loaded NVIDIA module isn't signed by
+      Canonical's kernel-module signing key. Either disable Secure Boot or
+      enroll a MOK (requires interactive boot-time access).
+      Verify with:  modinfo -F signer nvidia
+  when:
+    - solstream_use_signed_modules
+    - "'Canonical' not in (solstream_modinfo.stdout | regex_search('signer:\\s+(.*)', '\\1') | default(''))"

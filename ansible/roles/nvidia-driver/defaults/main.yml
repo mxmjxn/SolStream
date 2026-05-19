@@ -1,0 +1,7 @@
+---
+# nvidia-driver role defaults
+solstream_nvidia_branch: "580"
+
+# Whether to prefer DKMS-built modules when Secure Boot is off.
+# (When Secure Boot is on we always prefer signed precompiled regardless.)
+solstream_nvidia_prefer_dkms_unsecure: false

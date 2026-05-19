@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+# ~/.config/systemd/user/gamescope-sunshine.service
+
+[Unit]
+Description=gamescope (DRM/DP-1) hosting Steam Big Picture + Sunshine
+StartLimitIntervalSec=500
+StartLimitBurst=5
+After=pipewire.service wireplumber.service
+Wants=pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/gamescope \
+    --backend drm \
+    --prefer-output DP-1 \
+    -W {{ gamescope_width }} -H {{ gamescope_height }} -r {{ gamescope_refresh }} \
+    --expose-wayland \
+    --rt \
+    -- {{ solstream_session_script }}
+Restart=on-failure
+RestartSec=5s
+# Give Steam time to shut down on stop
+TimeoutStopSec=15s
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,8 @@
+---
+# TODO: wireguard role
+# This role is scaffolded but not yet implemented. See docs/architecture.md
+# for what it should do, and HeadlessEntertainment/PROJECT_LOG.md for the
+# exact commands used during the reference deployment.
+- name: TODO — implement wireguard role
+  ansible.builtin.debug:
+    msg: "wireguard role is not yet implemented in this SolStream build."

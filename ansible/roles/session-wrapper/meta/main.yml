@@ -1,0 +1,24 @@
+---
+# session-wrapper depends on everything else being in place: gamescope and
+# Sunshine binaries available, Steam bootstrapped, PipeWire user session up.
+# This role doesn't enforce that via Ansible deps (Ansible's role-deps are
+# strict but inflexible); instead solstream.yml plays them in order.
+
+galaxy_info:
+  author: SolStream contributors
+  description: |
+    Installs the gamescope-session.sh wrapper script and the user
+    systemd unit that owns the full streaming session lifecycle.
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+  galaxy_tags:
+    - gaming
+    - streaming
+    - gamescope
+    - sunshine
+
+dependencies: []

@@ -1,0 +1,75 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# /usr/local/bin/solstream-session.sh
+#
+# Inner command for gamescope-sunshine.service. Runs inside gamescope's DRM
+# session and is the parent of both Steam (persistent, Big Picture) and
+# Sunshine (foreground; when it dies, the whole session ends and systemd
+# restarts us).
+#
+# Responsibilities:
+#   1. Auto-accept the steam-installer first-run zenity prompt
+#   2. Load a PipeWire null-sink so Sunshine has audio to capture
+#   3. Launch Steam Big Picture in the background
+#   4. exec Sunshine in the foreground
+#   5. On any exit signal, take Steam down cleanly
+
+set -u
+LOG_PREFIX="[solstream-session]"
+log() { echo "$LOG_PREFIX $*" >&2; }
+
+# Required env. Gamescope auto-sets DISPLAY=:0 for its children (Xwayland).
+# We add WAYLAND_DISPLAY so Sunshine + future wayland-aware tooling can find
+# gamescope's socket.
+export WAYLAND_DISPLAY=gamescope-0
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+# Disable Vulkan layers that interfere with gamescope's WSI hooks. The Optimus
+# and present layers wrap surface creation — when they do, gamescope's WSI
+# hook loses track of the surface and pops a 'Hooking has failed somewhere!'
+# dialog at game launch. Neither is needed on a dedicated NVIDIA-only host.
+# VK_LAYER_MESA_device_select stays — benign and useful for GPU selection.
+export VK_LOADER_LAYERS_DISABLE="{{ solstream_vk_layers_disable }}"
+
+# --- 1. zenity stub (handles steam-installer's first-run "Install?" dialog) ---
+STUB_DIR="$XDG_RUNTIME_DIR/solstream-stubs"
+mkdir -p "$STUB_DIR"
+cat > "$STUB_DIR/zenity" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$STUB_DIR/zenity"
+export PATH="$STUB_DIR:$PATH"
+
+# --- 2. PipeWire null-sink for streamed audio ---
+if command -v pactl >/dev/null 2>&1; then
+  if ! pactl list short modules 2>/dev/null | grep -q "module-null-sink.*sink_name=Sunshine-Sink"; then
+    log "loading Sunshine-Sink null sink"
+    pactl load-module module-null-sink \
+      sink_name=Sunshine-Sink \
+      sink_properties='device.description="Sunshine Streaming Sink"' \
+      >/dev/null 2>&1 || log "warning: could not load null sink"
+    pactl set-default-sink Sunshine-Sink >/dev/null 2>&1 || true
+  fi
+fi
+
+# --- 3. Launch Steam in the background ---
+log "launching Steam (Big Picture)"
+/usr/games/steam -tenfoot -gamepadui >/tmp/steam-session.log 2>&1 &
+STEAM_PID=$!
+
+# Cleanup on exit / signal
+cleanup() {
+  log "shutting down — killing Steam (pid $STEAM_PID)"
+  /usr/games/steam -shutdown >/dev/null 2>&1 || true
+  for _ in 1 2 3 4 5 6 7 8; do
+    kill -0 "$STEAM_PID" 2>/dev/null || break
+    sleep 1
+  done
+  kill -KILL "$STEAM_PID" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# --- 4. exec Sunshine in the foreground ---
+log "starting Sunshine"
+exec /usr/bin/sunshine

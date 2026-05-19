@@ -1,0 +1,8 @@
+---
+- name: reload-user-systemd
+  ansible.builtin.command: systemctl --user daemon-reload
+  become: true
+  become_user: "{{ solstream_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ lookup('pipe', 'id -u ' + solstream_user) }}"
+  changed_when: false
