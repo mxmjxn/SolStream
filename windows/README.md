@@ -1,17 +1,25 @@
 # SolStream on Windows
 
-> **Phase 5 of the project plan — not yet implemented.**
+The Windows track is **scaffolding-level** as of v0.1. A working PowerShell installer + `Test-SolStream.ps1` doctor are in place but haven't been exercised on real Windows hardware yet. **Contributions very welcome** — see "What needs work" at the bottom.
 
-## TL;DR for now
+## TL;DR — installing today
 
-If you want to run SolStream-equivalent on a Windows host **today**:
+From an elevated PowerShell prompt on a Windows 11 host with an NVIDIA GPU:
 
-1. Install Sunshine for Windows from the [official release](https://github.com/LizardByte/Sunshine/releases) → `Sunshine-Windows-AMD64-installer.exe`
-2. Copy a tuned `sunshine.conf` from `../files/sunshine-templates/sunshine-windows.conf` over the default
-3. Add Steam Big Picture as a managed app in Sunshine's Web UI
-4. (Optional) Set up WireGuard on Windows for remote streaming — follow [WireGuard's Windows guide](https://www.wireguard.com/install/), then forward `51820/UDP` per `../docs/router-setup.md`
+```powershell
+# 1. Clone the repo
+git clone https://github.com/mxmjxn/SolStream.git C:\SolStream
+cd C:\SolStream\windows\scripts
 
-That covers ~95% of what SolStream automates on Linux. Windows handles the rest (driver signing, virtual displays, audio routing) natively because the OS includes it.
+# 2. Run the installer (Administrator required)
+Set-ExecutionPolicy -Scope Process Bypass
+.\Install-SolStream.ps1
+
+# 3. After install, run the doctor
+.\Test-SolStream.ps1
+```
+
+That installs Sunshine, drops a tuned `sunshine.conf` + `apps.json` at `%APPDATA%\Sunshine\`, opens Windows Firewall for Sunshine's ports, and (optionally) installs WireGuard for Windows.
 
 ## Why Windows is a separate, smaller track
 
@@ -20,30 +28,40 @@ Most of what makes SolStream's Linux installer complex doesn't apply to Windows:
 | Linux problem | Windows equivalent |
 |---|---|
 | gamescope compositor | Native DWM compositor; not needed |
-| Synthetic EDID + DRM modeset | Sunshine has a [Windows virtual display driver](https://github.com/LizardByte/Virtual-Display-Driver) you click-install |
+| Synthetic EDID + DRM modeset | Sunshine has a [Virtual Display Driver](https://github.com/itsmikethetech/Virtual-Display-Driver) you click-install |
 | NVIDIA driver branch / DKMS / Secure Boot | One installer from nvidia.com, signed by NVIDIA, just works |
 | seatd / libseat for DRM-master | N/A — Windows GPU access is unprivileged |
-| PipeWire null-sink | Sunshine includes a Windows audio capture path natively |
+| PipeWire null-sink | Sunshine includes Windows audio capture natively |
 | Steam first-run zenity bootstrap | Steam's Windows installer is a normal .msi |
 | systemd user units | Windows Service / Task Scheduler |
 | Cross-compiled i686 WSI Vulkan layer | N/A — DXGI, not Vulkan, on Windows |
-| ISP filter blocking DDNS | Same problem — same fix (disable filter, see `../docs/router-setup.md`) |
+| ISP filter blocking DDNS | Same problem — same fix (see `../docs/router-setup.md`) |
 
 About 80% of the Linux installer's value is "knowing how to get past these gotchas." Windows skips most of them.
 
-## What this directory will eventually contain
+## What's actually here
 
-- `Install-SolStream.ps1` — PowerShell installer that:
-  - Verifies NVIDIA driver version
-  - Installs Sunshine via winget (when it's in winget) or downloads the .msi
-  - Installs the Virtual-Display-Driver
-  - Lays down our tuned `sunshine.conf` + `apps.json`
-  - Opens Windows Firewall for Sunshine's ports
-  - Sets Steam Big Picture as the default app
-- `winget-manifest/` — PR-ready winget manifest for `solstream` so users can `winget install solstream`
-- `Test-SolStream.ps1` — equivalent of `solstream doctor` for Windows
-- Optional: a Windows version of the web installer, since the Python code is OS-agnostic
+```
+windows/
+├── README.md                   This file
+├── scripts/
+│   ├── Install-SolStream.ps1   PowerShell installer
+│   └── Test-SolStream.ps1      Health-check script (Windows equivalent of `solstream doctor`)
+├── winget-manifest/
+│   └── README.md               Plans for shipping via winget (not yet generated)
+└── docs/                       (Empty; will hold Windows-specific docs)
+```
 
-## Status
+## What needs work
 
-Not started. Contributions very welcome — much of this is straightforward PowerShell, and the Sunshine project has good Windows install docs as a starting point.
+**Help wanted on:**
+
+1. **Virtual Display Driver automation.** The installer currently leaves this as a manual step. Should download the latest VDD release, run `pnputil /add-driver` with the inf file, then enable it.
+2. **Steam Big Picture path detection.** The hardcoded `C:\Program Files (x86)\Steam\Steam.exe` won't work for users who installed Steam elsewhere.
+3. **Sunshine virtual display profile.** When SolStream's Sunshine config is paired with VDD, the right `output_name` setting needs to point at the virtual display.
+4. **Windows Server / Datacenter SKUs.** Untested. NVENC on those SKUs has different licensing implications.
+5. **Real testing on hardware.** Everything in this directory is theoretically correct based on the Linux deployment and Sunshine documentation, but no one has actually run it on Windows yet.
+6. **winget manifest generation + PR.** See `winget-manifest/README.md`.
+7. **A web installer for Windows.** The Python webui is OS-agnostic — could ship a Windows variant of `install.sh` (PowerShell bootstrap) that downloads the venv approach to a Windows host.
+
+If you have a Windows 11 machine with an NVIDIA GPU and an hour to spare, opening a PR with whatever you found broken would be the single most valuable contribution to SolStream right now.

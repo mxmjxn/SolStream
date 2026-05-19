@@ -47,6 +47,32 @@ jobs:
       - name: Bash syntax check
         run: bash -n webui/install.sh
 
+  windows-scripts-syntax:
+    name: PowerShell scripts syntax check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck
+          $issues = Invoke-ScriptAnalyzer -Path windows/scripts -Severity Error,Warning
+          if ($issues) {
+            $issues | Format-Table -AutoSize
+            throw "PSScriptAnalyzer found $($issues.Count) issue(s)"
+          }
+          # Also do a basic parse check on every .ps1
+          Get-ChildItem -Path windows/scripts -Filter *.ps1 | ForEach-Object {
+            $errors = $null
+            [System.Management.Automation.PSParser]::Tokenize(
+              (Get-Content -Raw $_.FullName), [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              throw "Parse errors in $($_.Name)"
+            }
+            Write-Host "  ✓ $($_.Name)"
+          }
+
   edid-generator-multi-resolution:
     name: EDID generator validates at multiple resolutions
     runs-on: ubuntu-24.04
