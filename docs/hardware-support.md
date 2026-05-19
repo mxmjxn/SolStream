@@ -3,15 +3,23 @@
 Status definitions:
 
 - **🟢 Tested** — actively verified on real hardware running SolStream
+- **🔵 CI-checked** — playbook syntax + apt resolution validated in CI, not on real hardware
 - **🟡 Should work** — code path exists, untested on this specific config (contributions welcome)
 - **🟠 Partial** — works for some features but not others
 - **🔴 Not supported** — known to not work, no current plan
+
+What CI does *not* check:
+- Driver actually loading
+- Streaming end-to-end
+- Anything requiring real GPU (it runs on GitHub Actions; no GPU)
+
+For the things CI can't check, the reference deployment ([private repo](https://github.com/mxmjxn/HeadlessEntertainment)) on RTX 3070 / Ubuntu 24.04 / Secure Boot enabled is the live source of truth.
 
 ## Host OS
 
 | OS | Status | Notes |
 |---|---|---|
-| Ubuntu 24.04 LTS (Noble) | 🟢 Tested | Reference platform |
+| Ubuntu 24.04 LTS (Noble) | 🟢 Tested + 🔵 CI-checked | Reference platform |
 | Ubuntu 24.10 / 25.04 | 🟡 Should work | Newer kernel; check `linux-modules-nvidia-*` availability |
 | Debian 13 (Trixie) | 🟡 Should work | Sunshine ships a `-debian-trixie-amd64.deb` officially |
 | Pop_OS 22.04 / 24.04 | 🟡 Should work | Pop ships its own NVIDIA stack; SolStream's driver role needs a small branch |

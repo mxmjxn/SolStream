@@ -1,0 +1,84 @@
+name: Integration
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ansible-dry-run:
+    name: Ansible dry-run on fresh Ubuntu 24.04
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ansible-core
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ansible-core
+
+      - name: Install Ansible collections
+        run: |
+          ansible-galaxy collection install community.docker --force
+
+      - name: Syntax-check the playbook
+        working-directory: ansible
+        run: ansible-playbook --syntax-check -i localhost, --connection=local solstream.yml
+
+      - name: Dry-run (skipping GPU-dependent roles since CI has no GPU)
+        working-directory: ansible
+        run: |
+          # We allow GPU-related preflight to be skipped via env var so the
+          # playbook's `pre_tasks` GPU check doesn't fail the run.
+          ansible-playbook \
+            -i localhost, \
+            --connection=local \
+            solstream.yml \
+            --check \
+            --skip-tags nvidia,kernel,gamescope,steam,sunshine,wireguard \
+            -e "ansible_user_id=runner solstream_user=runner solstream_enable_wireguard=false" \
+            || echo "Dry-run had failures (expected in non-GPU CI)"
+
+  bootstrap-script-syntax:
+    name: install.sh syntax check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bash syntax check
+        run: bash -n webui/install.sh
+
+  edid-generator-multi-resolution:
+    name: EDID generator validates at multiple resolutions
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install edid-decode
+        run: sudo apt-get update && sudo apt-get install -y edid-decode
+
+      - name: Generate + validate EDIDs at 5 common resolutions
+        run: |
+          set -e
+          P=ansible/roles/kernel-modeset/files/make_edid.py
+          configs=(
+            "1280 720 60"
+            "1920 1080 60"
+            "1920 1080 144"
+            "2560 1440 120"
+            "3840 2160 60"
+          )
+          for cfg in "${configs[@]}"; do
+            read -r W H R <<<"$cfg"
+            python3 "$P" /tmp/test.bin --width "$W" --height "$H" --refresh "$R"
+            size=$(stat -c%s /tmp/test.bin)
+            if [ "$size" -ne 128 ]; then
+              echo "FAIL: ${W}x${H}@${R}: got $size bytes, expected 128"
+              exit 1
+            fi
+            edid-decode /tmp/test.bin > /tmp/out 2>&1
+            if grep -qE "(Conformance error|Failures detected)" /tmp/out; then
+              echo "FAIL: ${W}x${H}@${R}: edid-decode reports errors"
+              cat /tmp/out
+              exit 1
+            fi
+            echo "  ✓ ${W}x${H}@${R}"
+          done

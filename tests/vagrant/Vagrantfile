@@ -1,0 +1,66 @@
+# SolStream end-to-end test environment.
+#
+# Spins up a fresh Ubuntu 24.04 VM and provisions it with the SolStream
+# playbook. Useful for testing changes without ever touching a real
+# streaming server.
+#
+# Caveats:
+#   - Most VM providers don't pass through a real GPU, so this VM won't
+#     have NVIDIA hardware. Roles that explicitly require GPU access
+#     (nvidia-driver, kernel-modeset, gamescope-build at runtime) will
+#     fail. Use this for testing the rest of the install path + apt
+#     dependency resolution + role idempotency.
+#   - For full GPU-passthrough testing, see tests/vagrant/Vagrantfile.gpu
+#     (which targets libvirt with VFIO; not in v0.1 scope).
+#
+# Usage:
+#   vagrant up
+#   vagrant ssh -c "sudo /opt/solstream/.venv/bin/solstream install --local --check"
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/noble64"
+  config.vm.hostname = "solstream-test"
+  config.vm.network "private_network", type: "dhcp"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = 4096
+    vb.cpus = 4
+    vb.name = "solstream-test"
+  end
+
+  config.vm.provider "libvirt" do |lv|
+    lv.memory = 4096
+    lv.cpus = 4
+  end
+
+  # Sync the project tree into the VM
+  config.vm.synced_folder "../..", "/vagrant"
+
+  config.vm.provision "shell", inline: <<-SHELL
+    set -e
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq python3-venv git ansible-core mokutil
+
+    # Make a streaming user
+    id streamer >/dev/null 2>&1 || useradd -m -s /bin/bash streamer
+
+    # Install SolStream CLI + webui from the synced folder
+    python3 -m venv /opt/solstream-venv
+    /opt/solstream-venv/bin/pip install --quiet --upgrade pip wheel
+    /opt/solstream-venv/bin/pip install --quiet /vagrant/cli
+    ln -sf /opt/solstream-venv/bin/solstream /usr/local/bin/solstream
+
+    # Symlink the playbook to the conventional location
+    mkdir -p /usr/local/share/solstream
+    ln -sf /vagrant/ansible /usr/local/share/solstream/ansible
+
+    echo
+    echo "=== Provisioning complete ==="
+    echo "Test commands:"
+    echo "  vagrant ssh -c 'solstream version'"
+    echo "  vagrant ssh -c 'solstream urls'"
+    echo "  vagrant ssh -c 'sudo solstream install --local --check --skip-tags nvidia,kernel,gamescope'"
+    echo "  vagrant ssh -c 'cd /vagrant/cli && PYTHONPATH=. python3 -m unittest discover tests/'"
+  SHELL
+end
