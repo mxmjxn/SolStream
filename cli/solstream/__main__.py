@@ -2,15 +2,16 @@
 
 This is the user-facing entrypoint. Subcommands:
 
-    solstream install     - run the install playbook (interactive)
-    solstream status      - show service state + key URLs
-    solstream urls        - print URLs only (machine-readable)
-    solstream doctor      - run health checks, report green/red status
-    solstream metrics N   - capture N seconds of GPU/encoder metrics
+    solstream install [-t TAGS]  - run the install playbook
+    solstream status             - show service state + URLs
+    solstream urls [--json]      - print URLs only (machine-readable)
+    solstream doctor             - run health checks
+    solstream metrics [SECONDS]  - capture GPU/encoder metrics during a stream
+    solstream version            - print version
 
 This module is intentionally small. The real work lives in the Ansible
 roles; the CLI's job is to (a) drive Ansible with sensible defaults and
-(b) check the resulting system's health.
+(b) report on the running system's health.
 """
 
 from __future__ import annotations
@@ -22,78 +23,192 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Path discovery — the CLI may be installed via pip (data files in package)
+# or run from a checkout. Find the playbook either way.
+_PKG_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _PKG_DIR.parent.parent
+_PLAYBOOK_CANDIDATES = [
+    _REPO_ROOT / "ansible" / "solstream.yml",
+    Path("/usr/local/share/solstream/ansible/solstream.yml"),
+    Path("/usr/share/solstream/ansible/solstream.yml"),
+]
+_URLS_FILE_CANDIDATES = [
+    Path("/etc/solstream/urls.json"),
+]
+_METRICS_SCRIPT = _PKG_DIR / "_metrics.sh"
+
+
+# ─── install ────────────────────────────────────────────────────────────
 
 def cmd_install(args: argparse.Namespace) -> int:
     """Run the install playbook against localhost (or a remote inventory)."""
-    repo_root = Path(__file__).resolve().parent.parent.parent
-    playbook = repo_root / "ansible" / "solstream.yml"
-    inventory = args.inventory or (repo_root / "ansible" / "inventory" / "hosts.yml")
-
-    if not playbook.exists():
-        print(f"error: {playbook} not found", file=sys.stderr)
+    playbook = _find_first_existing(_PLAYBOOK_CANDIDATES)
+    if not playbook:
+        print(
+            f"error: could not find solstream.yml in any of:\n  "
+            + "\n  ".join(str(p) for p in _PLAYBOOK_CANDIDATES),
+            file=sys.stderr,
+        )
         return 2
 
-    cmd = [
-        "ansible-playbook",
-        "-i", str(inventory),
-        str(playbook),
-    ]
+    inventory = args.inventory or (playbook.parent / "inventory" / "hosts.yml")
+
+    if not inventory.exists() and not args.local:
+        print(
+            f"error: inventory file {inventory} not found.\n"
+            f"  Either copy ansible/inventory/example.yml -> hosts.yml and edit,\n"
+            f"  or run with --local to install on this machine.",
+            file=sys.stderr,
+        )
+        return 2
+
+    cmd = ["ansible-playbook"]
+    if args.local:
+        cmd += ["-i", "localhost,", "--connection=local"]
+    else:
+        cmd += ["-i", str(inventory)]
+    cmd.append(str(playbook))
+
     if args.tags:
         cmd += ["--tags", args.tags]
+    if args.skip_tags:
+        cmd += ["--skip-tags", args.skip_tags]
     if args.check:
         cmd.append("--check")
+    if args.verbose:
+        cmd.append("-" + "v" * min(args.verbose, 4))
 
-    print(f"running: {' '.join(cmd)}")
-    return subprocess.call(cmd)
+    print(f"running: {' '.join(cmd)}", file=sys.stderr)
+    rc = subprocess.call(cmd)
+    if rc == 0:
+        print("\n" + "─" * 60)
+        print(" SolStream install complete. Next:")
+        print("─" * 60)
+        cmd_urls(argparse.Namespace(json=False))
+    return rc
 
+
+# ─── urls ───────────────────────────────────────────────────────────────
 
 def cmd_urls(args: argparse.Namespace) -> int:
     """Print the discoverable service URLs."""
-    # TODO: read from /etc/solstream/urls.json once discoverability role writes it
-    lan_ip = _detect_lan_ip()
-    urls = {
-        "sunshine_web_ui": f"https://{lan_ip}:47990",
-        "wg_easy_admin": f"https://{lan_ip}:51821",
-    }
+    urls = _load_urls()
     if args.json:
         print(json.dumps(urls, indent=2))
     else:
-        for name, url in urls.items():
-            print(f"{name:18s}  {url}")
+        # Pretty
+        order = ["sunshine_web_ui", "wg_easy_admin", "ssh"]
+        printable = [(k, urls[k]) for k in order if k in urls]
+        # Anything else
+        for k, v in sorted(urls.items()):
+            if k not in dict(printable):
+                printable.append((k, v))
+        for name, url in printable:
+            label = name.replace("_", " ").title().ljust(20)
+            print(f"  {label}  {url}")
     return 0
 
+
+# ─── status ─────────────────────────────────────────────────────────────
 
 def cmd_status(args: argparse.Namespace) -> int:
     """Show service status + URLs."""
     print("Services:")
-    for unit in ("gamescope-sunshine.service",):
-        rc = subprocess.call(
-            ["systemctl", "--user", "is-active", "--quiet", unit]
-        )
-        print(f"  {unit:35s} {'active' if rc == 0 else 'INACTIVE'}")
+    units = [
+        ("gamescope-sunshine.service", "user"),
+        ("seatd.service", "system"),
+        ("pipewire.service", "user"),
+    ]
+    for unit, scope in units:
+        if scope == "user":
+            rc = subprocess.call(
+                ["systemctl", "--user", "is-active", "--quiet", unit],
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            rc = subprocess.call(
+                ["systemctl", "is-active", "--quiet", unit],
+                stderr=subprocess.DEVNULL,
+            )
+        status = "active" if rc == 0 else "INACTIVE"
+        marker = "✓" if rc == 0 else "✗"
+        print(f"  {marker} {unit:35s} {status} ({scope})")
     print()
     return cmd_urls(args)
 
 
-def cmd_doctor(args: argparse.Namespace) -> int:
-    """Run health checks and report status."""
-    # TODO: shell out to `ansible-playbook --tags doctor` once that role exists
-    print("solstream doctor — TODO, run via 'ansible-playbook --tags doctor' for now")
-    return 0
+# ─── doctor ─────────────────────────────────────────────────────────────
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Run health checks via the doctor Ansible role."""
+    playbook = _find_first_existing(_PLAYBOOK_CANDIDATES)
+    if not playbook:
+        print("error: doctor needs the SolStream playbook installed", file=sys.stderr)
+        return 2
+
+    cmd = [
+        "ansible-playbook",
+        "-i", "localhost,",
+        "--connection=local",
+        str(playbook),
+        "--tags", "doctor",
+    ]
+    if args.verbose:
+        cmd.append("-vvv")
+    return subprocess.call(cmd)
+
+
+# ─── metrics ────────────────────────────────────────────────────────────
 
 def cmd_metrics(args: argparse.Namespace) -> int:
-    """Capture GPU + encoder metrics for N seconds."""
-    # TODO: port capture-stream-metrics.sh into Python or shell out
-    print(f"solstream metrics — TODO ({args.duration}s capture)")
+    """Capture GPU + encoder metrics for N seconds via the shell helper."""
+    if not _METRICS_SCRIPT.exists():
+        print(f"error: metrics helper not found at {_METRICS_SCRIPT}", file=sys.stderr)
+        return 2
+
+    cmd = [str(_METRICS_SCRIPT), str(args.duration)]
+    print(f"capturing {args.duration}s of GPU/encoder metrics — start your stream now")
+    return subprocess.call(cmd)
+
+
+# ─── version ────────────────────────────────────────────────────────────
+
+def cmd_version(args: argparse.Namespace) -> int:
+    from solstream import __version__
+    print(f"solstream {__version__}")
     return 0
+
+
+# ─── helpers ────────────────────────────────────────────────────────────
+
+def _find_first_existing(paths: list[Path]) -> Path | None:
+    for p in paths:
+        if p.exists():
+            return p
+    return None
+
+
+def _load_urls() -> dict[str, str]:
+    """Try the urls.json the discoverability role writes; fall back to defaults."""
+    f = _find_first_existing(_URLS_FILE_CANDIDATES)
+    if f:
+        try:
+            return json.loads(f.read_text())
+        except Exception:
+            pass
+    # Fallback — detect LAN IP ourselves
+    lan_ip = _detect_lan_ip()
+    return {
+        "sunshine_web_ui": f"https://{lan_ip}:47990",
+        "wg_easy_admin": f"https://{lan_ip}:51821",
+        "ssh": f"ssh {os.environ.get('USER','user')}@{lan_ip}",
+        "lan_ip": lan_ip,
+    }
 
 
 def _detect_lan_ip() -> str:
     """Best-effort detection of the host's LAN IP."""
-    # Open a UDP socket to a public address — kernel picks the right interface
     import socket
-
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("1.1.1.1", 80))
@@ -104,6 +219,8 @@ def _detect_lan_ip() -> str:
         s.close()
 
 
+# ─── argparse setup ─────────────────────────────────────────────────────
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="solstream",
@@ -113,8 +230,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p_install = sub.add_parser("install", help="Install/update SolStream on the target host")
     p_install.add_argument("--inventory", "-i", type=Path, help="Path to Ansible inventory file")
+    p_install.add_argument("--local", action="store_true",
+                           help="Install on the local machine without an inventory file")
     p_install.add_argument("--tags", "-t", help="Only run these tags (comma-separated)")
+    p_install.add_argument("--skip-tags", help="Skip these tags (comma-separated)")
     p_install.add_argument("--check", action="store_true", help="Dry-run only")
+    p_install.add_argument("--verbose", "-v", action="count", default=0)
     p_install.set_defaults(func=cmd_install)
 
     p_status = sub.add_parser("status", help="Show service status + URLs")
@@ -130,8 +251,12 @@ def main(argv: list[str] | None = None) -> int:
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_metrics = sub.add_parser("metrics", help="Capture GPU/encoder metrics")
-    p_metrics.add_argument("duration", type=int, default=30, nargs="?", help="seconds to capture")
+    p_metrics.add_argument("duration", type=int, default=30, nargs="?",
+                           help="seconds to capture (default: 30)")
     p_metrics.set_defaults(func=cmd_metrics)
+
+    p_version = sub.add_parser("version", help="Print version")
+    p_version.set_defaults(func=cmd_version)
 
     args = parser.parse_args(argv)
     return args.func(args)

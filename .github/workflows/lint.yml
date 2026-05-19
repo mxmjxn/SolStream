@@ -38,3 +38,39 @@ jobs:
         with:
           use-quiet-mode: yes
           folder-path: docs
+
+  cli-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run solstream CLI smoke tests
+        working-directory: cli
+        run: PYTHONPATH=. python -m unittest discover tests/
+
+  edid-generator-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install edid-decode
+        run: sudo apt-get update && sudo apt-get install -y edid-decode
+      - name: Generate + validate EDIDs at 3 resolutions
+        run: |
+          set -e
+          P=ansible/roles/kernel-modeset/files/make_edid.py
+          for cfg in "2560 1440 120" "1920 1080 60" "3840 2160 60"; do
+            read -r W H R <<<"$cfg"
+            python3 "$P" /tmp/test.bin --width "$W" --height "$H" --refresh "$R"
+            test "$(stat -c%s /tmp/test.bin)" -eq 128
+            edid-decode /tmp/test.bin >/tmp/edid.out 2>&1
+            if grep -q "Conformance error" /tmp/edid.out; then
+              echo "EDID conformance failure at ${W}x${H}@${R}"
+              cat /tmp/edid.out
+              exit 1
+            fi
+          done

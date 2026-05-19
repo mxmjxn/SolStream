@@ -33,3 +33,6 @@ Issues = "https://github.com/mxmjxn/SolStream/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["solstream*"]
+
+[tool.setuptools.package-data]
+solstream = ["_metrics.sh"]
