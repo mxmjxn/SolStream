@@ -1,0 +1,5 @@
+---
+- name: ldconfig
+  ansible.builtin.command: ldconfig
+  become: true
+  changed_when: false

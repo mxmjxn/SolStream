@@ -1,0 +1,27 @@
+---
+# kernel-modeset role defaults
+
+# DRM connector to fake a monitor on. DP-1 is the most reliable choice across
+# NVIDIA GPUs since it's enumerated first. Override only if you know your card
+# enumerates differently.
+solstream_edid_connector: "DP-1"
+
+# Resolution + refresh advertised by the synthetic EDID.
+# Must match what gamescope-sunshine.service drives.
+solstream_resolution_width: 2560
+solstream_resolution_height: 1440
+solstream_refresh_hz: 120
+
+# Where the EDID firmware file lives. Must be under /lib/firmware/edid/ for
+# the kernel's firmware loader to find it.
+solstream_edid_filename: "headless-{{ solstream_resolution_width }}x{{ solstream_resolution_height }}p{{ solstream_refresh_hz }}.bin"
+solstream_edid_path: "/lib/firmware/edid/{{ solstream_edid_filename }}"
+
+# Additional kernel cmdline args (added to GRUB_CMDLINE_LINUX_DEFAULT).
+# We set them as a list and join into the existing cmdline, preserving
+# anything the user already had.
+solstream_kernel_cmdline_args:
+  - "nvidia-drm.modeset=1"
+  - "nvidia-drm.fbdev=1"
+  - "drm.edid_firmware={{ solstream_edid_connector }}:edid/{{ solstream_edid_filename }}"
+  - "video={{ solstream_edid_connector }}:e"

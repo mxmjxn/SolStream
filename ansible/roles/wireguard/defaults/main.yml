@@ -1,0 +1,14 @@
+---
+# wireguard role defaults
+solstream_wg_easy_password_hash: ""    # bcrypt hash for wg-easy admin
+solstream_wg_subnet: "10.8.0.0/24"
+solstream_wg_default_dns: ""           # leave empty for default
+solstream_wg_allowed_ips: "0.0.0.0/0"  # full-tunnel by default
+solstream_wg_host: ""                  # public hostname (DDNS); empty = use public IP
+solstream_wg_data_dir: "/opt/wg-easy"
+
+# DDNS — provider-specific
+solstream_ddns_provider: ""            # "duckdns" or ""
+solstream_ddns_token: ""
+solstream_ddns_subdomain: ""
+solstream_ddns_data_dir: "/opt/duckdns"

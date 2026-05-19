@@ -1,0 +1,36 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# /etc/update-motd.d/99-solstream — prints SolStream status at login.
+
+. /etc/os-release 2>/dev/null
+
+# Color codes (graceful degradation if terminal doesn't support)
+B='\033[1m'
+N='\033[0m'
+G='\033[32m'
+R='\033[31m'
+
+URLS_FILE="{{ solstream_urls_file }}"
+SUNSHINE_URL=$(python3 -c "import json; print(json.load(open('$URLS_FILE'))['sunshine_web_ui'])" 2>/dev/null)
+WG_URL=$(python3 -c "import json; print(json.load(open('$URLS_FILE'))['wg_easy_admin'])" 2>/dev/null)
+
+# Check service status (best-effort)
+unit_active() {
+    systemctl --user --machine={{ solstream_user }}@.host is-active "$1" 2>/dev/null
+}
+
+SS_STATUS=$(unit_active gamescope-sunshine.service)
+
+cat <<EOF
+
+${B}── SolStream ──${N}
+
+  Sunshine Web UI .... ${SUNSHINE_URL:-https://<ip>:47990}
+  WireGuard Admin .... ${WG_URL:-https://<ip>:51821}
+
+  Streaming session ..  $([ "$SS_STATUS" = "active" ] && printf "${G}active${N}" || printf "${R}${SS_STATUS:-unknown}${N}")
+  Uptime ..............  $(uptime -p)
+
+  CLI:  solstream urls | solstream status | solstream doctor
+
+EOF

@@ -1,0 +1,7 @@
+---
+# steam role defaults
+solstream_user: "{{ solstream_user }}"
+solstream_steam_library: "/data/downloads/steamlibrary"
+
+# NVIDIA branch (must match nvidia-driver role)
+solstream_nvidia_branch: "580"

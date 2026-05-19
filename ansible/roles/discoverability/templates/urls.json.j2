@@ -1,0 +1,7 @@
+{
+  "sunshine_web_ui":  "https://{{ ansible_default_ipv4.address }}:47990",
+  "wg_easy_admin":    "https://{{ ansible_default_ipv4.address }}:51821",
+  "ssh":              "ssh {{ solstream_user }}@{{ ansible_default_ipv4.address }}",
+  "lan_ip":           "{{ ansible_default_ipv4.address }}",
+  "hostname":         "{{ ansible_hostname }}"
+}

@@ -1,0 +1,3 @@
+---
+solstream_urls_file: /etc/solstream/urls.json
+solstream_motd_script: /etc/update-motd.d/99-solstream

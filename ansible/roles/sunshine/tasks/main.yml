@@ -1,8 +1,85 @@
 ---
-# TODO: sunshine role
-# This role is scaffolded but not yet implemented. See docs/architecture.md
-# for what it should do, and HeadlessEntertainment/PROJECT_LOG.md for the
-# exact commands used during the reference deployment.
-- name: TODO — implement sunshine role
-  ansible.builtin.debug:
-    msg: "sunshine role is not yet implemented in this SolStream build."
+# sunshine role
+#
+# Installs Sunshine from the LizardByte GitHub release for ubuntu-24.04,
+# pre-stages config + apps.json. Also installs seatd because gamescope's
+# DRM backend needs DRM-master via libseat on a logind-less host.
+
+# ─── seatd: needed by gamescope-build's runtime but easy to install here ──
+- name: Install seatd (DRM-master broker for gamescope)
+  ansible.builtin.apt:
+    name: seatd
+    state: present
+    update_cache: false
+  become: true
+
+- name: Enable + start seatd system service
+  ansible.builtin.systemd:
+    name: seatd
+    enabled: true
+    state: started
+  become: true
+
+# ─── Sunshine .deb install ──────────────────────────────────────────────
+- name: Check whether Sunshine is already installed at the pinned version
+  ansible.builtin.command: sunshine --version
+  register: solstream_sunshine_check
+  changed_when: false
+  failed_when: false
+
+- name: Download Sunshine release .deb if not present at correct version
+  ansible.builtin.get_url:
+    url: "https://github.com/LizardByte/Sunshine/releases/download/{{ solstream_sunshine_version }}/{{ solstream_sunshine_deb_filename }}"
+    dest: "/tmp/{{ solstream_sunshine_deb_filename }}"
+    mode: "0644"
+  become: true
+  when: >
+    solstream_sunshine_check.rc != 0 or
+    solstream_sunshine_version.lstrip('v') not in (solstream_sunshine_check.stdout | default(''))
+
+- name: Install Sunshine
+  ansible.builtin.apt:
+    deb: "/tmp/{{ solstream_sunshine_deb_filename }}"
+    state: present
+  become: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: >
+    solstream_sunshine_check.rc != 0 or
+    solstream_sunshine_version.lstrip('v') not in (solstream_sunshine_check.stdout | default(''))
+
+- name: Reload udev so Sunshine's /dev/uinput / hidraw rules take effect
+  ansible.builtin.command: "{{ item }}"
+  loop:
+    - udevadm control --reload-rules
+    - udevadm trigger
+  become: true
+  changed_when: false
+
+# ─── Sunshine config + apps.json ────────────────────────────────────────
+- name: Ensure Sunshine config directory exists
+  ansible.builtin.file:
+    path: "{{ solstream_sunshine_config_dir }}"
+    state: directory
+    owner: "{{ solstream_user }}"
+    group: "{{ solstream_user }}"
+    mode: "0755"
+  become: true
+
+- name: Install sunshine.conf
+  ansible.builtin.template:
+    src: sunshine.conf.j2
+    dest: "{{ solstream_sunshine_config_dir }}/sunshine.conf"
+    owner: "{{ solstream_user }}"
+    group: "{{ solstream_user }}"
+    mode: "0644"
+  become: true
+
+- name: Install apps.json
+  ansible.builtin.template:
+    src: apps.json.j2
+    dest: "{{ solstream_sunshine_config_dir }}/apps.json"
+    owner: "{{ solstream_user }}"
+    group: "{{ solstream_user }}"
+    mode: "0644"
+  become: true

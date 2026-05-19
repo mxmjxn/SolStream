@@ -1,0 +1,1 @@
+../../ansible/roles/kernel-modeset/files/make_edid.py

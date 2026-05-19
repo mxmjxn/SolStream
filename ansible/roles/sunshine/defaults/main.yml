@@ -1,0 +1,21 @@
+---
+# sunshine role defaults
+
+solstream_user: "{{ solstream_user }}"
+
+# Pinned Sunshine release. Bump together with the .deb URL.
+solstream_sunshine_version: "v2025.924.154138"
+solstream_sunshine_deb_filename: "sunshine-ubuntu-24.04-amd64.deb"
+
+# Encoder tuning. P4 + twopass-disabled + realtime_hags = low-latency
+# without sacrificing visible quality.
+solstream_nvenc_preset: 4
+solstream_nvenc_twopass: "disabled"
+solstream_nvenc_realtime_hags: "enabled"
+solstream_hevc_mode: 3                # 10-bit HEVC when client supports it
+solstream_fec_percentage: 10          # LAN tuning; bump to 20+ for Wi-Fi clients
+solstream_min_threads: 4
+solstream_audio_sink: "Sunshine-Sink"
+
+# Where to drop the Sunshine config files for the streaming user.
+solstream_sunshine_config_dir: "/home/{{ solstream_user }}/.config/sunshine"

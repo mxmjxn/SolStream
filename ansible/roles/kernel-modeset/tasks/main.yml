@@ -1,8 +1,113 @@
 ---
-# TODO: kernel-modeset role
-# This role is scaffolded but not yet implemented. See docs/architecture.md
-# for what it should do, and HeadlessEntertainment/PROJECT_LOG.md for the
-# exact commands used during the reference deployment.
-- name: TODO — implement kernel-modeset role
+# kernel-modeset role
+#
+# Synthesizes a "monitor" on the chosen DRM connector so gamescope and
+# Sunshine see a connected display on a fully-headless box.
+#
+# Effects: writes a synthetic EDID firmware file, modifies GRUB cmdline,
+# regenerates grub.cfg + initramfs, and ENSURES THE USER REBOOTS before
+# subsequent roles run. (We do not auto-reboot; that's the user's call.)
+
+- name: Ensure python3 is available (for the EDID generator)
+  ansible.builtin.apt:
+    name: python3
+    state: present
+    update_cache: false
+  become: true
+
+- name: Ensure edid-decode is installed (for validation)
+  ansible.builtin.apt:
+    name: edid-decode
+    state: present
+    update_cache: false
+  become: true
+
+- name: Ensure /lib/firmware/edid exists
+  ansible.builtin.file:
+    path: /lib/firmware/edid
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Copy EDID generator script to a temp location
+  ansible.builtin.copy:
+    src: make_edid.py
+    dest: /tmp/solstream-make-edid.py
+    mode: "0755"
+  become: false
+
+- name: Generate synthetic EDID
+  ansible.builtin.command:
+    cmd: >
+      python3 /tmp/solstream-make-edid.py
+      /tmp/solstream-edid.bin
+      --width {{ solstream_resolution_width }}
+      --height {{ solstream_resolution_height }}
+      --refresh {{ solstream_refresh_hz }}
+    creates: /tmp/solstream-edid.bin
+  register: solstream_edid_generate
+  changed_when: false   # we re-generate every time but only install if changed
+
+- name: Validate EDID with edid-decode
+  ansible.builtin.command: edid-decode /tmp/solstream-edid.bin
+  register: solstream_edid_validate
+  changed_when: false
+  failed_when:
+    - "'EDID conformance error' in solstream_edid_validate.stdout"
+
+- name: Install EDID into /lib/firmware/edid/
+  ansible.builtin.copy:
+    src: /tmp/solstream-edid.bin
+    dest: "{{ solstream_edid_path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  register: solstream_edid_install
+  notify: regenerate-initramfs
+
+- name: Read current GRUB defaults
+  ansible.builtin.slurp:
+    src: /etc/default/grub
+  register: solstream_grub_content
+  become: true
+
+- name: Snapshot original GRUB before first edit
+  ansible.builtin.copy:
+    src: /etc/default/grub
+    dest: /etc/default/grub.solstream-orig
+    remote_src: true
+    force: false   # only the first time
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: Update GRUB cmdline with required args (idempotent merge)
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT="{{ solstream_kernel_cmdline_args | join(" ") }}"'
+    backup: true
+  become: true
+  register: solstream_grub_edit
+  notify: regenerate-grub
+
+- name: Trigger handlers if anything changed
+  ansible.builtin.meta: flush_handlers
+
+- name: Report whether a reboot is needed
+  ansible.builtin.set_fact:
+    solstream_reboot_required: "{{ solstream_edid_install.changed or solstream_grub_edit.changed }}"
+
+- name: Notify user about pending reboot
   ansible.builtin.debug:
-    msg: "kernel-modeset role is not yet implemented in this SolStream build."
+    msg: |
+      kernel-modeset changed boot config. REBOOT before continuing — without
+      it, /sys/class/drm/card0-{{ solstream_edid_connector }}/status will
+      remain 'disconnected' and subsequent roles (gamescope, sunshine) will
+      fail their preflight checks.
+  when: solstream_reboot_required | default(false)

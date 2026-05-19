@@ -1,8 +1,91 @@
 ---
-# TODO: wireguard role
-# This role is scaffolded but not yet implemented. See docs/architecture.md
-# for what it should do, and HeadlessEntertainment/PROJECT_LOG.md for the
-# exact commands used during the reference deployment.
-- name: TODO — implement wireguard role
-  ansible.builtin.debug:
-    msg: "wireguard role is not yet implemented in this SolStream build."
+# wireguard role
+#
+# Stands up wg-easy in Docker for inbound WireGuard + (optional) DDNS
+# updater. We deliberately don't try to manage Docker itself here —
+# require it as a prerequisite so users with established Docker stacks
+# (Compose, Portainer, etc.) can run side-by-side without conflict.
+
+- name: Verify Docker is available
+  ansible.builtin.command: docker info
+  register: solstream_docker_check
+  changed_when: false
+  failed_when: solstream_docker_check.rc != 0
+  ignore_errors: true
+
+- name: Fail with actionable message if Docker is missing
+  ansible.builtin.fail:
+    msg: |
+      Docker is required for the wireguard role (wg-easy + DDNS run in
+      containers). Install Docker first, e.g.:
+        curl -fsSL https://get.docker.com | sh
+        sudo usermod -aG docker {{ solstream_user }}
+      Then re-run this role.
+  when: solstream_docker_check.rc != 0
+
+- name: Ensure wg-easy data directory exists
+  ansible.builtin.file:
+    path: "{{ solstream_wg_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true
+
+- name: Refuse to run without wg-easy password hash
+  ansible.builtin.fail:
+    msg: |
+      solstream_wg_easy_password_hash is unset. Generate one with:
+        htpasswd -nBC 10 "" | tr -d ':\n'
+      Then set it in your inventory.
+  when: solstream_wg_easy_password_hash | length == 0
+
+- name: Start wg-easy container
+  community.docker.docker_container:
+    name: wg-easy
+    image: ghcr.io/wg-easy/wg-easy:latest
+    restart_policy: unless-stopped
+    state: started
+    network_mode: bridge
+    capabilities:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      net.ipv4.conf.all.src_valid_mark: "1"
+      net.ipv4.ip_forward: "1"
+    published_ports:
+      - "51820:51820/udp"
+      - "51821:51821/tcp"
+    volumes:
+      - "{{ solstream_wg_data_dir }}:/etc/wireguard"
+    env:
+      LANG: "en"
+      WG_HOST: "{{ solstream_wg_host }}"
+      PASSWORD_HASH: "{{ solstream_wg_easy_password_hash }}"
+      WG_DEFAULT_ADDRESS: "{{ solstream_wg_subnet | regex_replace('0/24$', 'x') }}"
+      WG_DEFAULT_DNS: "{{ solstream_wg_default_dns }}"
+      WG_ALLOWED_IPS: "{{ solstream_wg_allowed_ips }}"
+      WG_PORT: "51820"
+  become: true
+
+# ─── Optional: DDNS updater (DuckDNS only for now) ───────────────────────
+- name: Start DuckDNS updater container
+  community.docker.docker_container:
+    name: duckdns
+    image: lscr.io/linuxserver/duckdns:latest
+    restart_policy: unless-stopped
+    state: started
+    network_mode: bridge
+    env:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "Etc/UTC"
+      SUBDOMAINS: "{{ solstream_ddns_subdomain }}"
+      TOKEN: "{{ solstream_ddns_token }}"
+      UPDATE_IP: "ipv4"
+      LOG_FILE: "false"
+  become: true
+  when:
+    - solstream_ddns_provider == "duckdns"
+    - solstream_ddns_token | length > 0
+    - solstream_ddns_subdomain | length > 0

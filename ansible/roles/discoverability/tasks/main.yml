@@ -1,8 +1,33 @@
 ---
-# TODO: discoverability role
-# This role is scaffolded but not yet implemented. See docs/architecture.md
-# for what it should do, and HeadlessEntertainment/PROJECT_LOG.md for the
-# exact commands used during the reference deployment.
-- name: TODO — implement discoverability role
-  ansible.builtin.debug:
-    msg: "discoverability role is not yet implemented in this SolStream build."
+# discoverability role
+#
+# After the install finishes, users still need to know "where do I go now?"
+# We write a JSON file the CLI reads + a MOTD script that prints URLs on
+# every SSH login.
+
+- name: Ensure /etc/solstream exists
+  ansible.builtin.file:
+    path: /etc/solstream
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Write URLs JSON
+  ansible.builtin.template:
+    src: urls.json.j2
+    dest: "{{ solstream_urls_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: Install MOTD script
+  ansible.builtin.template:
+    src: motd.sh.j2
+    dest: "{{ solstream_motd_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  become: true

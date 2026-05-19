@@ -1,8 +1,44 @@
 ---
-# TODO: pipewire-session role
-# This role is scaffolded but not yet implemented. See docs/architecture.md
-# for what it should do, and HeadlessEntertainment/PROJECT_LOG.md for the
-# exact commands used during the reference deployment.
-- name: TODO — implement pipewire-session role
-  ansible.builtin.debug:
-    msg: "pipewire-session role is not yet implemented in this SolStream build."
+# pipewire-session role
+#
+# Ensures a user PipeWire session is up so Sunshine can capture audio via
+# the null-sink that session-wrapper creates at runtime.
+#
+# We don't define the sink here — that happens dynamically in
+# /usr/local/bin/solstream-session.sh because the sink only exists during
+# a streaming session. We just need PipeWire + WirePlumber + pipewire-pulse
+# + pulseaudio-utils (for the pactl CLI) installed and the user units
+# enabled.
+
+- name: Install PipeWire stack + pactl
+  ansible.builtin.apt:
+    name:
+      - pipewire
+      - pipewire-pulse
+      - pipewire-alsa
+      - wireplumber
+      - pipewire-audio-client-libraries
+      - libspa-0.2-modules
+      - rtkit
+      - pulseaudio-utils       # provides `pactl` — needed by the wrapper
+    state: present
+    update_cache: false
+  become: true
+
+- name: Enable PipeWire user units for the streaming user
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    scope: user
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  become_user: "{{ solstream_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ lookup('pipe', 'id -u ' + solstream_user) }}"
+  loop:
+    - pipewire.socket
+    - pipewire.service
+    - wireplumber.service
+    - pipewire-pulse.socket
+    - pipewire-pulse.service

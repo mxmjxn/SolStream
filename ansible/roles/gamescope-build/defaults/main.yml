@@ -1,0 +1,18 @@
+---
+# gamescope-build role defaults
+
+# Pinned upstream versions
+solstream_wayland_tag: "1.23.1"
+solstream_gamescope_tag: "3.16.23"
+
+# Source / build directories
+solstream_build_root: "/usr/local/src/solstream"
+solstream_wayland_src: "{{ solstream_build_root }}/wayland"
+solstream_gamescope_src: "{{ solstream_build_root }}/gamescope"
+
+# Install prefix — gamescope + wayland go to /usr/local so apt-managed
+# wayland 1.22 in /usr/lib stays untouched. ldconfig prefers /usr/local.
+solstream_install_prefix: "/usr/local"
+
+# Build parallelism
+solstream_build_jobs: "{{ ansible_processor_vcpus | default(4) }}"

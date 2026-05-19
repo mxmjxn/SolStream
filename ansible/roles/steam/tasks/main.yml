@@ -1,8 +1,59 @@
 ---
-# TODO: steam role
-# This role is scaffolded but not yet implemented. See docs/architecture.md
-# for what it should do, and HeadlessEntertainment/PROJECT_LOG.md for the
-# exact commands used during the reference deployment.
-- name: TODO — implement steam role
-  ansible.builtin.debug:
-    msg: "steam role is not yet implemented in this SolStream build."
+# steam role
+#
+# Adds i386 multiarch, installs Steam wrapper + i386 NVIDIA libs, creates
+# the library directory owned by the streaming user. Does not perform the
+# Steam runtime bootstrap — that happens inside the running gamescope
+# session (via the zenity stub in solstream-session.sh), the first time
+# the wrapper launches Steam.
+
+- name: Add i386 multiarch
+  ansible.builtin.command: dpkg --add-architecture i386
+  args:
+    creates: /var/lib/dpkg/arch
+  become: true
+  register: solstream_multiarch_added
+
+- name: Refresh apt after adding multiarch
+  ansible.builtin.apt:
+    update_cache: true
+  become: true
+  when: solstream_multiarch_added.changed
+
+- name: Pre-accept Steam EULA via debconf
+  ansible.builtin.shell: |
+    echo "steam steam/question select I AGREE" | debconf-set-selections
+    echo "steam steam/license note " | debconf-set-selections
+  become: true
+  changed_when: false
+
+- name: Install steam-installer wrapper
+  ansible.builtin.apt:
+    name: steam-installer
+    state: present
+    update_cache: false
+  become: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Install i386 NVIDIA userland (32-bit games need these)
+  ansible.builtin.apt:
+    name:
+      - "libnvidia-gl-{{ solstream_nvidia_branch }}:i386"
+      - "libnvidia-encode-{{ solstream_nvidia_branch }}:i386"
+      - "libnvidia-decode-{{ solstream_nvidia_branch }}:i386"
+      - "libnvidia-compute-{{ solstream_nvidia_branch }}:i386"
+      - "libvulkan1:i386"
+      - "mesa-vulkan-drivers:i386"
+    state: present
+    update_cache: false
+  become: true
+
+- name: Create Steam library directory
+  ansible.builtin.file:
+    path: "{{ solstream_steam_library }}"
+    state: directory
+    owner: "{{ solstream_user }}"
+    group: "{{ solstream_user }}"
+    mode: "0755"
+  become: true

@@ -1,0 +1,36 @@
+diff --git a/layer/VkLayer_FROG_gamescope_wsi.cpp b/layer/VkLayer_FROG_gamescope_wsi.cpp
+index af0c200..8aed4eb 100644
+--- a/layer/VkLayer_FROG_gamescope_wsi.cpp
++++ b/layer/VkLayer_FROG_gamescope_wsi.cpp
+@@ -1098,14 +1098,7 @@ namespace GamescopeWSILayer {
+       if (!gamescopeSurface) {
+         static bool s_warned = false;
+         if (!s_warned) {
+-          int messageId = -1;
+-          messagey::ShowSimple(
+-            "CreateSwapchainKHR: Creating swapchain for non-Gamescope swapchain.\nHooking has failed somewhere!\nYou may have a bad Vulkan layer interfering.\nPress OK to try to power through this error, or Cancel to stop.",
+-            "Gamescope WSI Layer Error",
+-            messagey::MessageBoxFlag::Warning | messagey::MessageBoxFlag::Simple_Cancel | messagey::MessageBoxFlag::Simple_OK,
+-            &messageId);
+-          if (messageId == 0) // Cancel
+-            abort();
++          fprintf(stderr, "[Gamescope WSI] CreateSwapchainKHR: Creating swapchain for non-Gamescope swapchain.\nHooking has failed somewhere!\nYou may have a bad Vulkan layer interfering.\nPress OK to try to power through this error, or Cancel to stop.\n");
+           s_warned = true;
+         }
+         return pDispatch->CreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
+@@ -1370,14 +1363,7 @@ namespace GamescopeWSILayer {
+       } else {
+         static bool s_warned = false;
+         if (!s_warned) {
+-          int messageId = -1;
+-          messagey::ShowSimple(
+-            "QueuePresentKHR: Attempting to present to a non-hooked swapchain.\nHooking has failed somewhere!\nYou may have a bad Vulkan layer interfering.\nPress OK to try to power through this error, or Cancel to stop.",
+-            "Gamescope WSI Layer Error",
+-            messagey::MessageBoxFlag::Warning | messagey::MessageBoxFlag::Simple_Cancel | messagey::MessageBoxFlag::Simple_OK,
+-            &messageId);
+-          if (messageId == 0) // Cancel
+-            abort();
++          fprintf(stderr, "[Gamescope WSI] QueuePresentKHR: Attempting to present to a non-hooked swapchain.\nHooking has failed somewhere!\nYou may have a bad Vulkan layer interfering.\nPress OK to try to power through this error, or Cancel to stop.\n");
+           s_warned = true;
+         }
+       }

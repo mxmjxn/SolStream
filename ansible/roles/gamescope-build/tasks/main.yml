@@ -1,8 +1,326 @@
 ---
-# TODO: gamescope-build role
-# This role is scaffolded but not yet implemented. See docs/architecture.md
-# for what it should do, and HeadlessEntertainment/PROJECT_LOG.md for the
-# exact commands used during the reference deployment.
-- name: TODO — implement gamescope-build role
-  ansible.builtin.debug:
-    msg: "gamescope-build role is not yet implemented in this SolStream build."
+# gamescope-build role
+#
+# Source-builds wayland 1.23 + gamescope (with x86_64 + i686 WSI Vulkan
+# layers + patched WSI dialog). Heavy role: ~10-15 minutes on a typical
+# 8-core box.
+#
+# Idempotent via tag pinning: if the installed binaries match the pinned
+# tags, the build steps skip.
+
+# ─── Build deps ──────────────────────────────────────────────────────────
+- name: Install gamescope build dependencies
+  ansible.builtin.apt:
+    name:
+      - meson
+      - ninja-build
+      - cmake
+      - pkg-config
+      - git
+      - libexpat1-dev
+      - libdrm-dev
+      - libgbm-dev
+      - libegl-dev
+      - libgles-dev
+      - libwayland-dev
+      - wayland-protocols
+      - libxkbcommon-dev
+      - libxkbcommon-x11-dev
+      - libx11-xcb-dev
+      - libxcb1-dev
+      - libxcb-composite0-dev
+      - libxcb-icccm4-dev
+      - libxcb-res0-dev
+      - libxcb-ewmh-dev
+      - libxcb-cursor-dev
+      - libxcb-xfixes0-dev
+      - libxcb-present-dev
+      - libxcb-shm0-dev
+      - libxres-dev
+      - libxdamage-dev
+      - libxcomposite-dev
+      - libxrender-dev
+      - libxext-dev
+      - libxfixes-dev
+      - libxi-dev
+      - libxmu-dev
+      - libxtst-dev
+      - libpixman-1-dev
+      - libcap-dev
+      - libsdl2-dev
+      - libpipewire-0.3-dev
+      - libdecor-0-dev
+      - glslang-tools
+      - spirv-tools
+      - libavif-dev
+      - libvulkan-dev
+      - vulkan-validationlayers
+      - libbenchmark-dev
+      - libglm-dev
+      - libluajit-5.1-dev
+      - libei-dev
+      - libeis-dev
+      - liboeffis-dev
+      - hwdata
+      - libudev-dev
+      - libinput-dev
+      - libseat-dev
+      - libxml2-dev
+      - libstb-dev
+      - liblcms2-dev
+      - xwayland
+      - xserver-xorg-dev
+      - ffmpeg
+    state: present
+  become: true
+
+# ─── 32-bit cross-build deps for the i686 WSI layer ──────────────────────
+- name: Install i386 multiarch + cross-build deps
+  ansible.builtin.apt:
+    name:
+      - gcc-multilib
+      - g++-multilib
+      - libvulkan-dev:i386
+      - libwayland-dev:i386
+      - libxcb1-dev:i386
+      - libx11-xcb-dev:i386
+      - libx11-dev:i386
+    state: present
+  become: true
+
+# ─── Workspace ───────────────────────────────────────────────────────────
+- name: Create source build root
+  ansible.builtin.file:
+    path: "{{ solstream_build_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+# ─── Wayland 1.23 ────────────────────────────────────────────────────────
+- name: Check if wayland 1.23+ is already installed
+  ansible.builtin.command:
+    cmd: pkg-config --modversion wayland-server
+  environment:
+    PKG_CONFIG_PATH: "{{ solstream_install_prefix }}/lib/x86_64-linux-gnu/pkgconfig:{{ solstream_install_prefix }}/lib/pkgconfig"
+  register: solstream_wayland_installed
+  changed_when: false
+  failed_when: false
+
+- name: Clone wayland source
+  ansible.builtin.git:
+    repo: https://gitlab.freedesktop.org/wayland/wayland.git
+    dest: "{{ solstream_wayland_src }}"
+    version: "{{ solstream_wayland_tag }}"
+    depth: 1
+  become: true
+  when: "(solstream_wayland_installed.stdout | default('0.0.0')) is version(solstream_wayland_tag, '<')"
+
+- name: Configure wayland meson
+  ansible.builtin.command:
+    cmd: >
+      meson setup build/
+      --prefix={{ solstream_install_prefix }}
+      --buildtype=release
+      -Ddocumentation=false
+      -Dtests=false
+    chdir: "{{ solstream_wayland_src }}"
+    creates: "{{ solstream_wayland_src }}/build/build.ninja"
+  become: true
+  when: "(solstream_wayland_installed.stdout | default('0.0.0')) is version(solstream_wayland_tag, '<')"
+
+- name: Build wayland
+  ansible.builtin.command:
+    cmd: "ninja -C build/ -j{{ solstream_build_jobs }}"
+    chdir: "{{ solstream_wayland_src }}"
+  become: true
+  when: "(solstream_wayland_installed.stdout | default('0.0.0')) is version(solstream_wayland_tag, '<')"
+  changed_when: true   # ninja always runs but emits no consistent "changed" signal
+
+- name: Install wayland
+  ansible.builtin.command:
+    cmd: "ninja -C build/ install"
+    chdir: "{{ solstream_wayland_src }}"
+  become: true
+  when: "(solstream_wayland_installed.stdout | default('0.0.0')) is version(solstream_wayland_tag, '<')"
+  changed_when: true
+  notify: ldconfig
+
+- name: Flush handlers (run ldconfig now if wayland was reinstalled)
+  ansible.builtin.meta: flush_handlers
+
+# ─── gamescope source + patch ────────────────────────────────────────────
+- name: Check installed gamescope version
+  ansible.builtin.command: "{{ solstream_install_prefix }}/bin/gamescope --version"
+  register: solstream_gamescope_installed
+  changed_when: false
+  failed_when: false
+
+- name: Clone gamescope source
+  ansible.builtin.git:
+    repo: https://github.com/ValveSoftware/gamescope.git
+    dest: "{{ solstream_gamescope_src }}"
+    version: "{{ solstream_gamescope_tag }}"
+  become: true
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+
+- name: Initialize gamescope submodules
+  ansible.builtin.command:
+    cmd: git submodule update --init --recursive --jobs 4
+    chdir: "{{ solstream_gamescope_src }}"
+  become: true
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+  changed_when: true
+
+- name: Copy WSI dialog-suppress patch into source tree
+  ansible.builtin.copy:
+    src: wsi-suppress-modal-dialog.patch
+    dest: "{{ solstream_gamescope_src }}/wsi-suppress-modal-dialog.patch"
+    mode: "0644"
+  become: true
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+
+- name: Apply WSI dialog-suppress patch (idempotent — skip if already applied)
+  ansible.builtin.command:
+    cmd: git apply --check wsi-suppress-modal-dialog.patch
+    chdir: "{{ solstream_gamescope_src }}"
+  register: solstream_patch_check
+  changed_when: false
+  failed_when: false
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+
+- name: Apply patch if it would apply cleanly
+  ansible.builtin.command:
+    cmd: git apply wsi-suppress-modal-dialog.patch
+    chdir: "{{ solstream_gamescope_src }}"
+  become: true
+  when:
+    - solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+    - solstream_patch_check.rc == 0
+
+# ─── gamescope 64-bit build ──────────────────────────────────────────────
+- name: Configure gamescope (x86_64 main)
+  ansible.builtin.command:
+    cmd: >
+      meson setup build/
+      --prefix={{ solstream_install_prefix }}
+      --buildtype=release
+      -Dpipewire=enabled
+    chdir: "{{ solstream_gamescope_src }}"
+    creates: "{{ solstream_gamescope_src }}/build/build.ninja"
+  become: true
+  environment:
+    PKG_CONFIG_PATH: "{{ solstream_install_prefix }}/lib/x86_64-linux-gnu/pkgconfig:{{ solstream_install_prefix }}/lib/pkgconfig"
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+
+- name: Build gamescope (x86_64)
+  ansible.builtin.command:
+    cmd: "ninja -C build/ -j{{ solstream_build_jobs }}"
+    chdir: "{{ solstream_gamescope_src }}"
+  become: true
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+  changed_when: true
+
+- name: Install gamescope (x86_64)
+  ansible.builtin.command:
+    cmd: "ninja -C build/ install"
+    chdir: "{{ solstream_gamescope_src }}"
+  become: true
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+  changed_when: true
+  notify: ldconfig
+
+# ─── gamescope i686 WSI layer cross-build ────────────────────────────────
+- name: Copy i386 meson cross-file
+  ansible.builtin.copy:
+    src: i386-linux-gnu-cross.txt
+    dest: "{{ solstream_gamescope_src }}/i386-linux-gnu-cross.txt"
+    mode: "0644"
+  become: true
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+
+- name: Configure gamescope WSI cross-build for i386
+  ansible.builtin.command:
+    cmd: >
+      meson setup build-i386/
+      --cross-file i386-linux-gnu-cross.txt
+      --prefix={{ solstream_install_prefix }}
+      --libdir=lib/i386-linux-gnu
+      --buildtype=release
+      -Denable_gamescope=false
+      -Denable_gamescope_wsi_layer=true
+      -Denable_openvr_support=false
+      -Dpipewire=disabled
+      -Drt_cap=disabled
+      -Ddrm_backend=disabled
+      -Dsdl2_backend=disabled
+      -Davif_screenshots=disabled
+      -Dinput_emulation=disabled
+      -Dbenchmark=disabled
+    chdir: "{{ solstream_gamescope_src }}"
+    creates: "{{ solstream_gamescope_src }}/build-i386/build.ninja"
+  become: true
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+
+- name: Build i686 WSI layer
+  ansible.builtin.command:
+    cmd: "ninja -C build-i386/ -j{{ solstream_build_jobs }}"
+    chdir: "{{ solstream_gamescope_src }}"
+  become: true
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+  changed_when: true
+
+- name: Install i686 WSI layer .so
+  ansible.builtin.copy:
+    src: "{{ solstream_gamescope_src }}/build-i386/layer/libVkLayer_FROG_gamescope_wsi_x86_64.so"
+    dest: "{{ solstream_install_prefix }}/lib/i386-linux-gnu/libVkLayer_FROG_gamescope_wsi_i386.so"
+    remote_src: true
+    mode: "0644"
+    owner: root
+    group: root
+  become: true
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+  notify: ldconfig
+
+- name: Install i686 WSI layer manifest
+  ansible.builtin.copy:
+    src: VkLayer_FROG_gamescope_wsi.i686.json
+    dest: "{{ solstream_install_prefix }}/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.i686.json"
+    mode: "0644"
+    owner: root
+    group: root
+  become: true
+
+- name: Ensure /usr/share/vulkan/implicit_layer.d exists (for Pressure Vessel)
+  ansible.builtin.file:
+    path: /usr/share/vulkan/implicit_layer.d
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Symlink x86_64 layer manifest into system path (Pressure Vessel visibility)
+  ansible.builtin.file:
+    src: "{{ solstream_install_prefix }}/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.x86_64.json"
+    dest: /usr/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.x86_64.json
+    state: link
+    force: true
+  become: true
+
+- name: Symlink i686 layer manifest into system path
+  ansible.builtin.file:
+    src: "{{ solstream_install_prefix }}/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.i686.json"
+    dest: /usr/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.i686.json
+    state: link
+    force: true
+  become: true
+
+- name: Flush ldconfig handler now
+  ansible.builtin.meta: flush_handlers
+
+# ─── Verify ──────────────────────────────────────────────────────────────
+- name: Verify gamescope installed at pinned tag
+  ansible.builtin.command: "{{ solstream_install_prefix }}/bin/gamescope --version"
+  register: solstream_gamescope_verify
+  changed_when: false
+  failed_when: solstream_gamescope_tag not in solstream_gamescope_verify.stdout
