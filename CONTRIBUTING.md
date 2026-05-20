@@ -70,3 +70,28 @@ Symptom description: what you expected, what actually happened
 ## Security
 
 If you find a security issue (especially in `install.sh`, the webui, or anything that runs as root), please email maxim.jackson@live.com instead of opening a public issue. See [`SECURITY.md`](SECURITY.md).
+
+## Cutting a release
+
+(Maintainer reference; contributors don't normally need this.)
+
+The release pipeline is automated:
+
+1. **As PRs land on `main`** — `.github/workflows/release.yml` runs the `draft-notes` job which keeps a draft release at the top of the [Releases page](https://github.com/mxmjxn/SolStream/releases) with auto-categorized notes based on PR labels (see `.github/release-drafter.yml`).
+2. **To cut a release** — tag and push:
+   ```bash
+   # For a pre-release / RC
+   git tag -a v0.2.0-rc1 -m "v0.2.0-rc1 — what's new"
+   git push origin v0.2.0-rc1
+
+   # For a stable release
+   git tag -a v0.2.0 -m "v0.2.0 — what's new"
+   git push origin v0.2.0
+   ```
+3. The `publish` job in `release.yml` triggers on the `v*` tag, extracts the matching section from `CHANGELOG.md` (or auto-generates if no section exists), and publishes a real Release with the `prerelease` flag set automatically based on the tag pattern (`-rc`, `-beta`, `-alpha` → pre-release).
+
+When labeling PRs that should appear in release notes, use these labels (from `.github/release-drafter.yml`):
+
+- `breaking-change`, `enhancement`, `feature`, `role`, `bug`, `fix`, `windows`, `documentation`, `hardware`, `chore`, `ci`, `dependencies`
+
+Add `skip-changelog` to suppress a PR from notes (e.g., for trivial cleanups).

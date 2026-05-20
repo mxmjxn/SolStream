@@ -2,6 +2,7 @@
 
 [![Lint](https://github.com/mxmjxn/SolStream/actions/workflows/lint.yml/badge.svg)](https://github.com/mxmjxn/SolStream/actions/workflows/lint.yml)
 [![Integration](https://github.com/mxmjxn/SolStream/actions/workflows/integration.yml/badge.svg)](https://github.com/mxmjxn/SolStream/actions/workflows/integration.yml)
+[![Latest Release](https://img.shields.io/github/v/release/mxmjxn/SolStream?include_prereleases&sort=semver)](https://github.com/mxmjxn/SolStream/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > Headless game-streaming server, on a fresh Ubuntu install, in about 15 minutes.

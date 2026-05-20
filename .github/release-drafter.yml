@@ -1,0 +1,88 @@
+# Release-drafter config — auto-categorizes merged PRs into release notes.
+# https://github.com/release-drafter/release-drafter
+
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+
+categories:
+  - title: "🚨 Breaking changes"
+    labels:
+      - "breaking-change"
+  - title: "✨ New features"
+    labels:
+      - "enhancement"
+      - "feature"
+  - title: "🛠 New / changed roles"
+    labels:
+      - "role"
+  - title: "🐛 Bug fixes"
+    labels:
+      - "bug"
+      - "fix"
+  - title: "🪟 Windows track"
+    labels:
+      - "windows"
+  - title: "📚 Documentation"
+    labels:
+      - "documentation"
+      - "docs"
+  - title: "🤝 Hardware compatibility reports"
+    labels:
+      - "hardware"
+  - title: "🔧 Maintenance / CI"
+    labels:
+      - "chore"
+      - "ci"
+      - "dependencies"
+
+# How to bump the version based on labels
+version-resolver:
+  major:
+    labels:
+      - "breaking-change"
+  minor:
+    labels:
+      - "enhancement"
+      - "feature"
+      - "role"
+  patch:
+    labels:
+      - "bug"
+      - "fix"
+      - "chore"
+      - "docs"
+      - "ci"
+  default: patch
+
+change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
+change-title-escapes: '\<*_&'
+
+# Skip PRs that don't have any of the categorized labels
+exclude-labels:
+  - "skip-changelog"
+  - "no-release-notes"
+
+template: |
+  ## Changes
+
+  $CHANGES
+
+  ## Installation
+
+  See [README](https://github.com/$OWNER/$REPOSITORY#quickstart) for the install paths. Three onramps available:
+
+  ```bash
+  # 1. Web installer
+  curl -fsSL https://raw.githubusercontent.com/$OWNER/$REPOSITORY/main/webui/install.sh | sudo bash
+
+  # 2. CLI via pip
+  pip install solstream
+  sudo solstream install --local
+
+  # 3. Ansible directly
+  git clone https://github.com/$OWNER/$REPOSITORY.git
+  cd $REPOSITORY/ansible
+  ansible-playbook -i inventory/hosts.yml solstream.yml
+  ```
+
+  **Full changelog:** https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
