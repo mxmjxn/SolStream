@@ -2,17 +2,32 @@
 # SolStream's ansible-lint config.
 #
 # We use a single project-wide variable prefix (`solstream_`) rather than
-# per-role prefixes. This is a deliberate choice — every role is part of one
-# coherent product, and prefixing variables with the role name would make
-# them harder to pass between roles. Tell the linter not to flag this.
+# per-role prefixes. This is a deliberate choice — every role is part of
+# one coherent product, and prefixing variables with the role name would
+# make them harder to pass between roles. Tell the linter not to flag this.
 
 skip_list:
+  # Naming
   - var-naming[no-role-prefix]   # solstream_* is our prefix, not <rolename>_*
-  - jinja[spacing]               # cosmetic; not worth blocking CI on
+  - name[casing]                 # handlers can be lowercase; matter of style
+  - jinja[spacing]               # cosmetic
+
+  # Module-vs-command choices that are reasonable here
+  - command-instead-of-module    # we use `command:` deliberately in several places
+                                  # where the module equivalents (git, systemd in
+                                  # specific edge cases) are either wrong or unavailable
+
+  # Handler vs task choice — debatable; we use tasks with changed_when=true
+  # when the change is part of a sequence that needs to keep going
+  - no-handler
+
+  # We use `changed_when: true` to acknowledge "this always changes" rather
+  # than calculating idempotency from output we can't easily parse
+  - no-changed-when
 
 warn_list:
-  - yaml[line-length]            # warn but don't fail; ansible roles need long lines for templated commands
-  - risky-shell-pipe             # we use pipefail when it matters; warn only
+  - yaml[line-length]
+  - risky-shell-pipe
 
 # Files / paths to ignore
 exclude_paths:
