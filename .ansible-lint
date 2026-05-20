@@ -1,0 +1,21 @@
+---
+# SolStream's ansible-lint config.
+#
+# We use a single project-wide variable prefix (`solstream_`) rather than
+# per-role prefixes. This is a deliberate choice — every role is part of one
+# coherent product, and prefixing variables with the role name would make
+# them harder to pass between roles. Tell the linter not to flag this.
+
+skip_list:
+  - var-naming[no-role-prefix]   # solstream_* is our prefix, not <rolename>_*
+  - jinja[spacing]               # cosmetic; not worth blocking CI on
+
+warn_list:
+  - yaml[line-length]            # warn but don't fail; ansible roles need long lines for templated commands
+  - risky-shell-pipe             # we use pipefail when it matters; warn only
+
+# Files / paths to ignore
+exclude_paths:
+  - .github/
+  - .venv/
+  - tests/

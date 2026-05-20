@@ -13,7 +13,7 @@ What CI does *not* check:
 - Streaming end-to-end
 - Anything requiring real GPU (it runs on GitHub Actions; no GPU)
 
-For the things CI can't check, the reference deployment ([private repo](https://github.com/mxmjxn/HeadlessEntertainment)) on RTX 3070 / Ubuntu 24.04 / Secure Boot enabled is the live source of truth.
+For the things CI can't check, the reference deployment on RTX 3070 / Ubuntu 24.04 / Secure Boot enabled is the live source of truth (private repo, not linkable publicly).
 
 ## Host OS
 

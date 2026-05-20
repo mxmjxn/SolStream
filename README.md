@@ -33,7 +33,7 @@ The pieces under the hood already exist — gamescope, Sunshine, Steam, PipeWire
 
 ## Status
 
-🚧 **Pre-release.** Pulled from real production deployment notes ([see history](https://github.com/mxmjxn/HeadlessEntertainment)) and being packaged into an idempotent installer now. Public API will stabilize at v0.1.0.
+🚧 **Pre-release.** Pulled from a real (private) production deployment's notes and packaged into an idempotent installer. Public API will stabilize at v0.1.0.
 
 ## Why this exists
 

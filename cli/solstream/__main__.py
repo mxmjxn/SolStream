@@ -45,7 +45,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     playbook = _find_first_existing(_PLAYBOOK_CANDIDATES)
     if not playbook:
         print(
-            f"error: could not find solstream.yml in any of:\n  "
+            "error: could not find solstream.yml in any of:\n  "
             + "\n  ".join(str(p) for p in _PLAYBOOK_CANDIDATES),
             file=sys.stderr,
         )

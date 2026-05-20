@@ -4,9 +4,6 @@
 # Health-check role. Run with `--tags doctor`. Reports a green/red status
 # for each known failure mode (each one mapped to a section in
 # docs/troubleshooting.md). Never modifies anything.
-#
-# Each check sets a fact like solstream_check_<name>_ok and accumulates a
-# list of failures, then prints a summary at the end.
 
 - name: Initialize check results
   ansible.builtin.set_fact:
@@ -21,42 +18,66 @@
 
 - name: Record NVIDIA check
   ansible.builtin.set_fact:
-    solstream_checks: "{{ solstream_checks + [{'name': 'nvidia-smi', 'ok': solstream_check_nvidia.rc == 0, 'detail': solstream_check_nvidia.stdout | default('FAILED')}] }}"
+    solstream_checks: >-
+      {{ solstream_checks + [{
+        'name': 'nvidia-smi',
+        'ok': solstream_check_nvidia.rc == 0,
+        'detail': solstream_check_nvidia.stdout | default('FAILED'),
+      }] }}
 
 - name: Check Secure Boot vs module signing
-  ansible.builtin.shell: |
-    sb=$(mokutil --sb-state 2>/dev/null | head -1)
-    signer=$(modinfo -F signer nvidia 2>/dev/null | head -1)
-    echo "sb=$sb signer=$signer"
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      sb=$(mokutil --sb-state 2>/dev/null | head -1)
+      signer=$(modinfo -F signer nvidia 2>/dev/null | head -1)
+      echo "sb=$sb signer=$signer"
+    executable: /bin/bash
   register: solstream_check_sb
   changed_when: false
   failed_when: false
 
 - name: Record SB/signing check
   ansible.builtin.set_fact:
-    solstream_checks: "{{ solstream_checks + [{'name': 'secure-boot/signing', 'ok': true, 'detail': solstream_check_sb.stdout}] }}"
+    solstream_checks: >-
+      {{ solstream_checks + [{
+        'name': 'secure-boot/signing',
+        'ok': true,
+        'detail': solstream_check_sb.stdout,
+      }] }}
 
 # ─── DRM / EDID ─────────────────────────────────────────────────────────
 - name: Check DRM connector status
-  ansible.builtin.shell: "cat /sys/class/drm/card0-DP-1/status 2>/dev/null"
+  ansible.builtin.command: cat /sys/class/drm/card0-DP-1/status
   register: solstream_check_drm
   changed_when: false
   failed_when: false
 
 - name: Record DRM check
   ansible.builtin.set_fact:
-    solstream_checks: "{{ solstream_checks + [{'name': 'drm-connector', 'ok': (solstream_check_drm.stdout | default('')) == 'connected', 'detail': solstream_check_drm.stdout | default('missing')}] }}"
+    solstream_checks: >-
+      {{ solstream_checks + [{
+        'name': 'drm-connector',
+        'ok': (solstream_check_drm.stdout | default('')) == 'connected',
+        'detail': solstream_check_drm.stdout | default('missing'),
+      }] }}
 
 # ─── seatd ──────────────────────────────────────────────────────────────
 - name: Check seatd running
-  ansible.builtin.command: systemctl is-active seatd
+  ansible.builtin.systemd:
+    name: seatd
   register: solstream_check_seatd
   changed_when: false
   failed_when: false
 
 - name: Record seatd check
   ansible.builtin.set_fact:
-    solstream_checks: "{{ solstream_checks + [{'name': 'seatd', 'ok': solstream_check_seatd.stdout == 'active', 'detail': solstream_check_seatd.stdout}] }}"
+    solstream_checks: >-
+      {{ solstream_checks + [{
+        'name': 'seatd',
+        'ok': solstream_check_seatd.status.ActiveState | default('') == 'active',
+        'detail': solstream_check_seatd.status.ActiveState | default('unknown'),
+      }] }}
 
 # ─── gamescope + WSI layers ─────────────────────────────────────────────
 - name: Check gamescope binary
@@ -67,7 +88,13 @@
 
 - name: Record gamescope check
   ansible.builtin.set_fact:
-    solstream_checks: "{{ solstream_checks + [{'name': 'gamescope', 'ok': solstream_check_gamescope.rc == 0, 'detail': solstream_check_gamescope.stdout | default('FAILED') | regex_replace('\\\\x1b\\\\[[0-9;]*m', '')}] }}"
+    solstream_checks: >-
+      {{ solstream_checks + [{
+        'name': 'gamescope',
+        'ok': solstream_check_gamescope.rc == 0,
+        'detail': (solstream_check_gamescope.stdout | default('FAILED')
+                   | regex_replace('\\x1b\\[[0-9;]*m', '')),
+      }] }}
 
 - name: Check x86_64 WSI layer
   ansible.builtin.stat:
@@ -81,7 +108,13 @@
 
 - name: Record WSI layers check
   ansible.builtin.set_fact:
-    solstream_checks: "{{ solstream_checks + [{'name': 'wsi-layers', 'ok': (solstream_wsi_64.stat.exists and solstream_wsi_32.stat.exists), 'detail': ('x86_64='+ (solstream_wsi_64.stat.exists | string) + ' i686=' + (solstream_wsi_32.stat.exists | string))}] }}"
+    solstream_checks: >-
+      {{ solstream_checks + [{
+        'name': 'wsi-layers',
+        'ok': (solstream_wsi_64.stat.exists and solstream_wsi_32.stat.exists),
+        'detail': ('x86_64=' + (solstream_wsi_64.stat.exists | string)
+                   + ' i686=' + (solstream_wsi_32.stat.exists | string)),
+      }] }}
 
 # ─── Sunshine ───────────────────────────────────────────────────────────
 - name: Check Sunshine binary
@@ -92,7 +125,12 @@
 
 - name: Record Sunshine check
   ansible.builtin.set_fact:
-    solstream_checks: "{{ solstream_checks + [{'name': 'sunshine', 'ok': solstream_check_sunshine.rc == 0, 'detail': solstream_check_sunshine.stdout_lines | default(['FAILED']) | first}] }}"
+    solstream_checks: >-
+      {{ solstream_checks + [{
+        'name': 'sunshine',
+        'ok': solstream_check_sunshine.rc == 0,
+        'detail': (solstream_check_sunshine.stdout_lines | default(['FAILED']) | first),
+      }] }}
 
 - name: Check Sunshine web UI listening
   ansible.builtin.wait_for:
@@ -105,18 +143,29 @@
 
 - name: Record Sunshine port check
   ansible.builtin.set_fact:
-    solstream_checks: "{{ solstream_checks + [{'name': 'sunshine-port-47990', 'ok': solstream_check_sunshine_port is not failed, 'detail': 'listening' if solstream_check_sunshine_port is not failed else 'not bound'}] }}"
+    solstream_checks: >-
+      {{ solstream_checks + [{
+        'name': 'sunshine-port-47990',
+        'ok': solstream_check_sunshine_port is not failed,
+        'detail': 'listening' if solstream_check_sunshine_port is not failed else 'not bound',
+      }] }}
 
 # ─── Session ────────────────────────────────────────────────────────────
 - name: Check gamescope-sunshine user service
-  ansible.builtin.shell: "systemctl --user --machine={{ solstream_user }}@.host is-active gamescope-sunshine.service"
+  ansible.builtin.command:
+    cmd: "systemctl --user --machine={{ solstream_user }}@.host is-active gamescope-sunshine.service"
   register: solstream_check_session
   changed_when: false
   failed_when: false
 
 - name: Record session check
   ansible.builtin.set_fact:
-    solstream_checks: "{{ solstream_checks + [{'name': 'session-unit', 'ok': solstream_check_session.stdout == 'active', 'detail': solstream_check_session.stdout}] }}"
+    solstream_checks: >-
+      {{ solstream_checks + [{
+        'name': 'session-unit',
+        'ok': solstream_check_session.stdout == 'active',
+        'detail': solstream_check_session.stdout,
+      }] }}
 
 # ─── Render the summary ─────────────────────────────────────────────────
 - name: Print check summary
@@ -129,5 +178,7 @@
 
 - name: Fail playbook run if any check failed
   ansible.builtin.fail:
-    msg: "{{ (solstream_checks | selectattr('ok', 'equalto', false) | list | length) }} doctor check(s) failed. See above + docs/troubleshooting.md."
+    msg: >-
+      {{ (solstream_checks | selectattr('ok', 'equalto', false) | list | length) }}
+      doctor check(s) failed. See above + docs/troubleshooting.md.
   when: solstream_checks | selectattr('ok', 'equalto', false) | list | length > 0
