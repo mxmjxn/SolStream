@@ -130,6 +130,18 @@ chmod +x /tmp/zenity-stub/zenity
 PATH=/tmp/zenity-stub:$PATH /usr/games/steam
 ```
 
+### Can't exit a game from the Moonlight client (especially mobile)
+
+SolStream installs `/usr/local/bin/solstream-game-shutdown.sh` and exposes it as a **"Quit current game"** tile in Sunshine's apps.json. From any Moonlight client (mobile included), back out of the running game to the host's app list, tap **"Quit current game"**, and the script will:
+
+1. Find the Steam-launched game's reaper process (`reaper SteamLaunch ...` or `pressure-vessel-wrap ...`)
+2. Send SIGTERM and wait up to 8 seconds for a clean exit
+3. Escalate to SIGKILL if the game ignored SIGTERM
+
+Steam Big Picture itself stays running — only the game dies. After the tile's command exits, Moonlight returns to the app grid and you can disconnect.
+
+If you want to skip even that step, use SSH from any device on your LAN: `ssh user@host /usr/local/bin/solstream-game-shutdown.sh`. The log is at `/tmp/solstream-game-shutdown.log` and shows what got killed.
+
 ### Steam Big Picture renders but the controller doesn't respond
 
 Three places to check:

@@ -4,6 +4,12 @@ All notable changes to SolStream are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and SolStream aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it reaches v0.1.0.
 
+## [Unreleased]
+
+### Added
+
+- **"Quit current game" Sunshine tile + `solstream-game-shutdown.sh` script.** Tile appears in the Moonlight app grid alongside "Steam Big Picture." Selecting it finds the running game's reaper process, sends SIGTERM, waits 8 seconds, then SIGKILLs if needed. Steam Big Picture itself stays up. Primarily for mobile clients where the on-screen gamepad makes quitting from inside the game painful. Log at `/tmp/solstream-game-shutdown.log`.
+
 ## [0.1.0] — Unreleased (v0.1 release candidate)
 
 ### Added
