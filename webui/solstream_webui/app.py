@@ -46,11 +46,11 @@ def build_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def page_root(request: Request):
-        ctx = {
-            "request": request,
-            "hardware": detect.snapshot(),
-        }
-        return _TEMPLATES.TemplateResponse("step1_welcome.html", ctx)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "step1_welcome.html",
+            {"hardware": detect.snapshot()},
+        )
 
     @app.post("/config", response_class=HTMLResponse)
     async def page_config(
@@ -59,13 +59,15 @@ def build_app() -> FastAPI:
     ):
         if confirm != "yes":
             return _TEMPLATES.TemplateResponse(
+                request,
                 "step1_welcome.html",
-                {"request": request, "hardware": detect.snapshot(),
+                {"hardware": detect.snapshot(),
                  "error": "Please confirm to continue."},
             )
         return _TEMPLATES.TemplateResponse(
+            request,
             "step2_config.html",
-            {"request": request, "hardware": detect.snapshot()},
+            {"hardware": detect.snapshot()},
         )
 
     @app.post("/review", response_class=HTMLResponse)
@@ -95,9 +97,9 @@ def build_app() -> FastAPI:
             "ddns_token": ddns_token,
         }
         return _TEMPLATES.TemplateResponse(
+            request,
             "step3_review.html",
             {
-                "request": request,
                 "hardware": detect.snapshot(),
                 "config": config,
                 "config_json": json.dumps(config),
@@ -130,16 +132,18 @@ def build_app() -> FastAPI:
     @app.get("/install/watch", response_class=HTMLResponse)
     async def page_install_watch(request: Request):
         return _TEMPLATES.TemplateResponse(
+            request,
             "step4_install.html",
-            {"request": request},
+            {},
         )
 
     @app.get("/done", response_class=HTMLResponse)
     async def page_done(request: Request):
         urls = detect.urls()
         return _TEMPLATES.TemplateResponse(
+            request,
             "step5_done.html",
-            {"request": request, "urls": urls},
+            {"urls": urls},
         )
 
     return app

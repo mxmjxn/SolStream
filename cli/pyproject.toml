@@ -6,15 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "solstream"
 version = "0.0.1"
 description = "Headless game-streaming server installer + diagnostics"
-readme = "../README.md"
+readme = "README.md"
 authors = [{name = "Maxim Jackson", email = "maxim.jackson@live.com"}]
-license = {file = "../LICENSE"}
+license = "MIT"
 requires-python = ">=3.10"
 keywords = ["sunshine", "moonlight", "gamescope", "steam", "streaming", "homelab"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Topic :: System :: Installation/Setup",
