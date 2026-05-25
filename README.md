@@ -2,7 +2,8 @@
 
 [![Lint](https://github.com/mxmjxn/SolStream/actions/workflows/lint.yml/badge.svg)](https://github.com/mxmjxn/SolStream/actions/workflows/lint.yml)
 [![Integration](https://github.com/mxmjxn/SolStream/actions/workflows/integration.yml/badge.svg)](https://github.com/mxmjxn/SolStream/actions/workflows/integration.yml)
-[![Latest Release](https://img.shields.io/github/v/release/mxmjxn/SolStream?include_prereleases&sort=semver)](https://github.com/mxmjxn/SolStream/releases)
+[![Linux release](https://img.shields.io/github/v/release/mxmjxn/SolStream?include_prereleases&sort=semver&filter=*linux*&label=linux&color=blue)](https://github.com/mxmjxn/SolStream/releases?q=linux)
+[![Windows release](https://img.shields.io/github/v/release/mxmjxn/SolStream?include_prereleases&sort=semver&filter=*windows*&label=windows&color=blue)](https://github.com/mxmjxn/SolStream/releases?q=windows)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > Headless game-streaming server, on a fresh Ubuntu install, in about 15 minutes.
@@ -35,6 +36,15 @@ The pieces under the hood already exist — gamescope, Sunshine, Steam, PipeWire
 ## Status
 
 🚧 **Pre-release.** Pulled from a real (private) production deployment's notes and packaged into an idempotent installer. Public API will stabilize at v0.1.0.
+
+### Platform tracks
+
+The two platforms have independent release cadences. The [Releases page](https://github.com/mxmjxn/SolStream/releases) lists both — Linux tags have no platform suffix (e.g. `v0.1.0-rc1`), Windows tags end in `-windows` (e.g. `v0.1.0-windows`).
+
+| Platform | Latest version | Status |
+|---|---|---|
+| **Linux** (Ubuntu 24.04 + NVIDIA) | [`v0.1.0-rc1`](https://github.com/mxmjxn/SolStream/releases?q=tag%3A%22v0.1.0-rc1%22) | Pre-release; install path validated on fresh Ubuntu 24.04 VM |
+| **Windows** (Win 11 + NVIDIA) | *no release yet* | PowerShell installer scaffolded but unverified — see [`windows/README.md`](windows/README.md) |
 
 ## Why this exists
 

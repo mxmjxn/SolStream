@@ -24,6 +24,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # When a v* tag is pushed, promote the draft to a real release.
+  #
+  # Tag-to-platform convention:
+  #   v0.1.0              — Linux (default; no suffix needed)
+  #   v0.1.0-linux        — Linux (explicit; equivalent to v0.1.0)
+  #   v0.1.0-windows      — Windows
+  #   v0.1.0-rc1          — Linux pre-release
+  #   v0.1.0-windows-rc1  — Windows pre-release
+  #
+  # The detection below extracts the platform from the tag, prepends a
+  # "(Linux)" or "(Windows)" label to the release title, and sets the
+  # pre-release flag automatically for -rc / -beta / -alpha tags.
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -32,12 +43,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect if this is a pre-release tag
-        id: prerelease
+      - name: Detect platform + pre-release from tag
+        id: meta
         run: |
-          if [[ "${GITHUB_REF_NAME}" == *"-rc"* ]] \
-             || [[ "${GITHUB_REF_NAME}" == *"-beta"* ]] \
-             || [[ "${GITHUB_REF_NAME}" == *"-alpha"* ]]; then
+          TAG="${GITHUB_REF_NAME}"
+          # Default platform = linux (no suffix means Linux)
+          PLATFORM="linux"
+          if [[ "$TAG" == *"-windows"* ]]; then
+            PLATFORM="windows"
+          elif [[ "$TAG" == *"-linux"* ]]; then
+            PLATFORM="linux"
+          fi
+          echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+
+          # Title-case label for the release title
+          if [ "$PLATFORM" = "windows" ]; then
+            echo "platform_label=Windows" >> "$GITHUB_OUTPUT"
+          else
+            echo "platform_label=Linux" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Pre-release detection
+          if [[ "$TAG" == *"-rc"* ]] || [[ "$TAG" == *"-beta"* ]] || [[ "$TAG" == *"-alpha"* ]]; then
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
@@ -46,12 +73,19 @@ jobs:
       - name: Extract release notes for this tag from CHANGELOG.md
         id: notes
         run: |
-          # Pull the section of CHANGELOG.md matching this tag's version.
+          # Strip 'v' prefix and platform suffix to find the CHANGELOG section.
           VERSION="${GITHUB_REF_NAME#v}"
-          awk -v ver="$VERSION" '
+          VERSION="${VERSION%-windows}"
+          VERSION="${VERSION%-linux}"
+          # For pre-release tags like 1.0.0-rc1, also try the base version
+          BASE_VERSION="${VERSION%-rc*}"
+          BASE_VERSION="${BASE_VERSION%-beta*}"
+          BASE_VERSION="${BASE_VERSION%-alpha*}"
+
+          awk -v ver="$VERSION" -v base="$BASE_VERSION" '
             /^## \[/ {
               if (in_section) exit
-              if ($0 ~ "\\[" ver "\\]") { in_section = 1; next }
+              if ($0 ~ "\\[" ver "\\]" || $0 ~ "\\[" base "\\]") { in_section = 1; next }
             }
             in_section { print }
           ' CHANGELOG.md > /tmp/notes.md
@@ -66,10 +100,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "${{ github.ref_name }}"
+          name: "${{ github.ref_name }} (${{ steps.meta.outputs.platform_label }})"
           body_path: ${{ steps.notes.outputs.use_auto == 'false' && '/tmp/notes.md' || '' }}
           generate_release_notes: ${{ steps.notes.outputs.use_auto == 'true' }}
-          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          prerelease: ${{ steps.meta.outputs.is_prerelease }}
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

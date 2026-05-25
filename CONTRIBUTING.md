@@ -78,17 +78,32 @@ If you find a security issue (especially in `install.sh`, the webui, or anything
 The release pipeline is automated:
 
 1. **As PRs land on `main`** — `.github/workflows/release.yml` runs the `draft-notes` job which keeps a draft release at the top of the [Releases page](https://github.com/mxmjxn/SolStream/releases) with auto-categorized notes based on PR labels (see `.github/release-drafter.yml`).
-2. **To cut a release** — tag and push:
-   ```bash
-   # For a pre-release / RC
-   git tag -a v0.2.0-rc1 -m "v0.2.0-rc1 — what's new"
-   git push origin v0.2.0-rc1
+2. **To cut a release** — tag and push. The tag's suffix determines which platform the release is for:
 
-   # For a stable release
+   | Tag pattern | Platform | Pre-release? |
+   |---|---|---|
+   | `v0.2.0` | Linux (default) | No |
+   | `v0.2.0-linux` | Linux (explicit) | No |
+   | `v0.2.0-windows` | Windows | No |
+   | `v0.2.0-rc1` | Linux | Yes (`-rc` in tag) |
+   | `v0.2.0-windows-rc1` | Windows | Yes |
+   | `v0.2.0-beta1` / `v0.2.0-alpha1` | Linux | Yes |
+
+   ```bash
+   # Linux stable
    git tag -a v0.2.0 -m "v0.2.0 — what's new"
    git push origin v0.2.0
+
+   # Windows stable
+   git tag -a v0.2.0-windows -m "v0.2.0 (Windows) — what's new"
+   git push origin v0.2.0-windows
+
+   # Linux pre-release
+   git tag -a v0.2.0-rc1 -m "v0.2.0-rc1 — what's new"
+   git push origin v0.2.0-rc1
    ```
-3. The `publish` job in `release.yml` triggers on the `v*` tag, extracts the matching section from `CHANGELOG.md` (or auto-generates if no section exists), and publishes a real Release with the `prerelease` flag set automatically based on the tag pattern (`-rc`, `-beta`, `-alpha` → pre-release).
+
+3. The `publish` job in `release.yml` triggers on the `v*` tag, detects the platform from the suffix, prepends a `(Linux)` or `(Windows)` label to the release title, extracts the matching section from `CHANGELOG.md` (or auto-generates if no section exists), and publishes a real Release with the `prerelease` flag set automatically based on the tag pattern (`-rc`, `-beta`, `-alpha` → pre-release). The two platforms have independent release cadences — a Linux v0.3.0 doesn't imply a Windows v0.3.0 exists.
 
 When labeling PRs that should appear in release notes, use these labels (from `.github/release-drafter.yml`):
 
