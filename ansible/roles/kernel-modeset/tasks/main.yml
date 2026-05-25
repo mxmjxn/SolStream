@@ -46,14 +46,17 @@
       --width {{ solstream_resolution_width }}
       --height {{ solstream_resolution_height }}
       --refresh {{ solstream_refresh_hz }}
-    creates: /tmp/solstream-edid.bin
   register: solstream_edid_generate
   changed_when: false   # we re-generate every time but only install if changed
+  # Run even in --check mode — this is safe (writes a temp file under /tmp)
+  # and downstream tasks need the file to exist
+  check_mode: false
 
 - name: Validate EDID with edid-decode
   ansible.builtin.command: edid-decode /tmp/solstream-edid.bin
   register: solstream_edid_validate
   changed_when: false
+  check_mode: false
   failed_when:
     - "'EDID conformance error' in solstream_edid_validate.stdout"
 

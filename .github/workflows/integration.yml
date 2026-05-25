@@ -47,6 +47,68 @@ jobs:
       - name: Bash syntax check
         run: bash -n webui/install.sh
 
+  pip-install-roundtrip:
+    name: pip install ./cli ./webui works + webui routes return 200
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create venv and install both packages from source
+        run: |
+          python3 -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet --upgrade pip wheel
+          /tmp/venv/bin/pip install --no-cache-dir ./cli ./webui
+
+      - name: CLI sanity
+        run: |
+          /tmp/venv/bin/solstream version
+          /tmp/venv/bin/solstream --help
+
+      - name: Webui boots + all wizard routes return 200
+        run: |
+          set -e
+          /tmp/venv/bin/solstream-webui --port 8081 --host 127.0.0.1 \
+            > /tmp/webui.log 2>&1 &
+          WEBUI_PID=$!
+          # Wait for it to listen (max 15s)
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+            sleep 1
+            ss -tlnp 2>/dev/null | grep -q ":8081 " && break
+          done
+
+          fail=0
+          for path in / /install/watch /done; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8081${path}")
+            if [ "$code" = "200" ]; then
+              echo "  ✓ GET ${path}  → 200"
+            else
+              echo "  ✗ GET ${path}  → ${code}"
+              fail=1
+            fi
+          done
+
+          # Also exercise the form-POST routes
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+                   -d "confirm=yes" http://127.0.0.1:8081/config)
+          [ "$code" = "200" ] && echo "  ✓ POST /config  → 200" \
+                              || { echo "  ✗ POST /config  → $code"; fail=1; }
+
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+                   -d "resolution=2560x1440&refresh=120&steam_library=/data/steamlibrary&nvenc_preset=4" \
+                   http://127.0.0.1:8081/review)
+          [ "$code" = "200" ] && echo "  ✓ POST /review  → 200" \
+                              || { echo "  ✗ POST /review  → $code"; fail=1; }
+
+          kill $WEBUI_PID 2>/dev/null || true
+          if [ $fail -ne 0 ]; then
+            echo "──── webui server log ────"
+            cat /tmp/webui.log
+            exit 1
+          fi
+
   windows-scripts-syntax:
     name: PowerShell scripts syntax check
     runs-on: windows-latest

@@ -1,8 +1,9 @@
 ---
 # Defaults for the session-wrapper role.
 # These pull from the playbook-level vars but can be overridden per-host.
-
-solstream_user: "{{ solstream_user }}"
+# We deliberately do NOT define `solstream_user` here — it MUST come from
+# inventory or extra-vars. A `solstream_user: "{{ solstream_user }}"`
+# self-reference resolves unpredictably (often to ansible_user = root).
 
 # Resolution gamescope drives DP-1 at (matches the EDID we generated).
 gamescope_width: "{{ solstream_resolution_width | default(2560) }}"

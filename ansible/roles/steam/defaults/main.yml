@@ -1,6 +1,8 @@
 ---
 # steam role defaults
-solstream_user: "{{ solstream_user }}"
+# `solstream_user` must come from inventory/extra-vars (see session-wrapper
+# defaults note).
+
 solstream_steam_library: "/data/downloads/steamlibrary"
 
 # NVIDIA branch (must match nvidia-driver role)

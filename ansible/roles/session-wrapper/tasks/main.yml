@@ -55,6 +55,11 @@
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers
 
+- name: Discover streaming user's UID
+  ansible.builtin.command: id -u {{ solstream_user }}
+  register: solstream_user_uid
+  changed_when: false
+
 - name: Enable and start the gamescope-sunshine user service
   ansible.builtin.systemd:
     name: "{{ solstream_systemd_unit_name }}"
@@ -66,5 +71,4 @@
   become_user: "{{ solstream_user }}"
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ solstream_user_uid.stdout }}"
-  vars:
-    solstream_user_uid: "{{ lookup('pipe', 'id -u ' + solstream_user) }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ solstream_user_uid.stdout }}/bus"

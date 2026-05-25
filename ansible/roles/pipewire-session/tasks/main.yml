@@ -25,7 +25,30 @@
     update_cache: false
   become: true
 
-- name: Enable PipeWire user units for the streaming user
+# Ensure the user has lingering enabled BEFORE we try to touch their systemd
+# instance. Without this, user@<uid>.service won't be running and ansible's
+# systemd module fails with 'Failed to connect to bus'. (We also enable it
+# in session-wrapper, but that role runs later — pipewire-session is the
+# first role that needs the user systemd to actually work.)
+- name: Enable user-systemd lingering for the streaming user
+  ansible.builtin.command: loginctl enable-linger {{ solstream_user }}
+  args:
+    creates: "/var/lib/systemd/linger/{{ solstream_user }}"
+  become: true
+
+- name: Discover streaming user's UID
+  ansible.builtin.command: id -u {{ solstream_user }}
+  register: solstream_user_uid_result
+  changed_when: false
+
+- name: Wait for the user systemd bus to be ready (lingering may have just started it)
+  ansible.builtin.wait_for:
+    path: "/run/user/{{ solstream_user_uid_result.stdout }}/bus"
+    timeout: 30
+
+# PipeWire's own sockets/services are critical — Sunshine's null-sink
+# wiring depends on them. Hard-fail if these don't come up.
+- name: Enable PipeWire user units for the streaming user (critical)
   ansible.builtin.systemd:
     name: "{{ item }}"
     scope: user
@@ -35,10 +58,38 @@
   become: true
   become_user: "{{ solstream_user }}"
   environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ lookup('pipe', 'id -u ' + solstream_user) }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ solstream_user_uid_result.stdout }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ solstream_user_uid_result.stdout }}/bus"
   loop:
     - pipewire.socket
     - pipewire.service
-    - wireplumber.service
     - pipewire-pulse.socket
     - pipewire-pulse.service
+
+# WirePlumber is the session manager. It can fail to start on minimal hosts
+# (no real audio device, no graphical session) but Sunshine's null-sink path
+# via pactl works without it. Best-effort start, warn if it doesn't take.
+- name: Try to enable wireplumber (best-effort — non-fatal)
+  ansible.builtin.systemd:
+    name: wireplumber.service
+    scope: user
+    enabled: true
+    state: started
+  become: true
+  become_user: "{{ solstream_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ solstream_user_uid_result.stdout }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ solstream_user_uid_result.stdout }}/bus"
+  register: solstream_wireplumber
+  failed_when: false
+
+- name: Note if wireplumber couldn't start
+  ansible.builtin.debug:
+    msg: |
+      wireplumber didn't start cleanly. This is non-fatal — Sunshine's
+      Sunshine-Sink works without wireplumber as long as pipewire-pulse is up.
+      If you want full audio session management later, debug with:
+        systemctl --user --machine={{ solstream_user }}@.host status wireplumber
+  when:
+    - solstream_wireplumber is defined
+    - solstream_wireplumber.failed | default(false)

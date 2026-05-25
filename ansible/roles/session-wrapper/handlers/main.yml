@@ -5,4 +5,5 @@
   become_user: "{{ solstream_user }}"
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ lookup('pipe', 'id -u ' + solstream_user) }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ lookup('pipe', 'id -u ' + solstream_user) }}/bus"
   changed_when: false

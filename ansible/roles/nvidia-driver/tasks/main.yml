@@ -67,13 +67,20 @@
   changed_when: false
   failed_when: solstream_modinfo.rc != 0
 
+- name: Extract NVIDIA module's signer line
+  ansible.builtin.command: modinfo -F signer nvidia
+  register: solstream_modinfo_signer
+  changed_when: false
+  failed_when: false   # missing modinfo output isn't fatal — we handle below
+  when: solstream_use_signed_modules
+
 - name: Refuse if Secure Boot is enabled and modules are not signed by Canonical
   ansible.builtin.fail:
     msg: |
       Secure Boot is enabled but the loaded NVIDIA module isn't signed by
       Canonical's kernel-module signing key. Either disable Secure Boot or
       enroll a MOK (requires interactive boot-time access).
-      Verify with:  modinfo -F signer nvidia
+      Got: {{ solstream_modinfo_signer.stdout | default('(no signer info)') }}
   when:
     - solstream_use_signed_modules
-    - "'Canonical' not in (solstream_modinfo.stdout | regex_search('signer:\\s+(.*)', '\\1') | default(''))"
+    - "'Canonical' not in (solstream_modinfo_signer.stdout | default(''))"

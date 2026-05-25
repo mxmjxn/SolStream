@@ -1,0 +1,39 @@
+---
+# Defaults that MUST be overridable by inventory host_vars and extra-vars.
+#
+# Why this file exists rather than play-level `vars:` in solstream.yml:
+# play vars beat inventory host_vars in Ansible's precedence, so putting
+# user-tunables in `vars:` would silently override what users set in their
+# inventory file. group_vars/all sits below inventory host_vars in
+# precedence, so it acts as a real default.
+#
+# Pinned-version vars stay in the play (those should NOT be overridden by
+# inventory under normal use).
+
+# Streaming user — the Linux user who will own the gamescope-sunshine
+# session. Must exist before running the playbook. Override per-host in
+# inventory.
+solstream_user: streamer
+
+# Stream profile — gamescope will run at this resolution/refresh, EDID
+# will advertise it as the virtual monitor's native mode.
+solstream_resolution_width: 2560
+solstream_resolution_height: 1440
+solstream_refresh_hz: 120
+
+# Steam library install location. Should be on the largest fast volume.
+solstream_steam_library: /data/downloads/steamlibrary
+
+# Encoder tuning (passed into sunshine.conf template)
+solstream_nvenc_preset: 4                # P4 = balanced quality/latency
+solstream_nvenc_twopass: "disabled"      # disabled for lowest latency
+solstream_hevc_mode: 3                   # 10-bit HEVC when client supports
+
+# WireGuard / remote streaming — opt in by setting in inventory
+solstream_enable_wireguard: false
+solstream_wg_easy_password_hash: ""
+
+# DDNS — only if solstream_enable_wireguard is true
+solstream_ddns_provider: ""
+solstream_ddns_token: ""
+solstream_ddns_subdomain: ""
