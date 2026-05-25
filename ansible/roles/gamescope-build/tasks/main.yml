@@ -151,8 +151,9 @@
   ansible.builtin.meta: flush_handlers
 
 # ─── gamescope source + patch ────────────────────────────────────────────
-- name: Check installed gamescope version
-  ansible.builtin.command: "{{ solstream_install_prefix }}/bin/gamescope --version"
+- name: Check installed gamescope version (uses shell — gamescope writes --version to STDERR, not stdout)
+  ansible.builtin.shell:
+    cmd: "{{ solstream_install_prefix }}/bin/gamescope --version 2>&1 || true"
   register: solstream_gamescope_installed
   changed_when: false
   failed_when: false
@@ -271,6 +272,16 @@
   when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
   changed_when: true
 
+- name: Ensure i386 lib directory exists (copy module won't create parents)
+  ansible.builtin.file:
+    path: "{{ solstream_install_prefix }}/lib/i386-linux-gnu"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when: solstream_gamescope_tag not in (solstream_gamescope_installed.stdout | default(''))
+
 - name: Install i686 WSI layer .so
   ansible.builtin.copy:
     src: "{{ solstream_gamescope_src }}/build-i386/layer/libVkLayer_FROG_gamescope_wsi_x86_64.so"
@@ -319,8 +330,9 @@
   ansible.builtin.meta: flush_handlers
 
 # ─── Verify ──────────────────────────────────────────────────────────────
-- name: Verify gamescope installed at pinned tag
-  ansible.builtin.command: "{{ solstream_install_prefix }}/bin/gamescope --version"
+- name: Verify gamescope installed at pinned tag (combined stdout+stderr)
+  ansible.builtin.shell:
+    cmd: "{{ solstream_install_prefix }}/bin/gamescope --version 2>&1 || true"
   register: solstream_gamescope_verify
   changed_when: false
   failed_when: solstream_gamescope_tag not in solstream_gamescope_verify.stdout

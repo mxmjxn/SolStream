@@ -80,8 +80,9 @@
       }] }}
 
 # ─── gamescope + WSI layers ─────────────────────────────────────────────
-- name: Check gamescope binary
-  ansible.builtin.command: /usr/local/bin/gamescope --version
+- name: Check gamescope binary (writes --version to stderr; combine)
+  ansible.builtin.shell:
+    cmd: /usr/local/bin/gamescope --version 2>&1 || true
   register: solstream_check_gamescope
   changed_when: false
   failed_when: false
