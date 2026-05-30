@@ -11,6 +11,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Windows graphical installer (`Install-SolStream-GUI.ps1`).** WPF window with hardware detection, option pickers (NVENC preset, Steam path with Browse button, firewall + WireGuard toggles), and a live progress log. Runs the install in a background runspace so the window stays responsive; self-elevates if not started as Administrator. Install logic refactored into a shared `SolStreamInstall.psm1` module consumed by both the CLI (`Install-SolStream.ps1`) and the GUI — no duplicated logic. New CI job validates the WPF XAML as well-formed XML on Linux (no Windows runner needed). Still scaffolding-level: untested on real Windows hardware.
 - **"Quit current game" Sunshine tile + `solstream-game-shutdown.sh` script.** Tile appears in the Moonlight app grid alongside "Steam Big Picture." Selecting it finds the running game's reaper process, sends SIGTERM, waits 8 seconds, then SIGKILLs if needed. Steam Big Picture itself stays up. Primarily for mobile clients where the on-screen gamepad makes quitting from inside the game painful. Log at `/tmp/solstream-game-shutdown.log`.
 
+## [0.1.0-windows-rc3] — first real-hardware fixes
+
+First test on actual Windows 11 + RTX 5090 hardware. The GUI rendered correctly, detected the GPU + driver, and the options panel worked — but two bugs surfaced. Both fixed here.
+
+### Fixed
+
+- **Scripts crashed on Windows PowerShell 5.1 due to non-ASCII + no BOM.** The scripts contained box-drawing characters, check marks, and em-dashes saved as BOM-less UTF-8. PowerShell 5.1 (the default "Windows PowerShell") reads such files as Windows-1252, turning those characters into mojibake and producing parse errors ("string is missing the terminator", "missing closing }"). All four Windows scripts are now **pure ASCII**, which is robust across every PowerShell version, editor, and git config. A new CI job (`windows-scripts-ascii-only`) fails the build on any non-ASCII byte so this can't recur, and the `PSUseBOMForUnicodeEncodedFile` lint rule is re-enabled.
+- **Install hung at "Installing Sunshine via winget...".** Calling `winget` directly inside the GUI's background runspace hangs because the runspace has no console/stdin for winget's interactive elements. Replaced with a hardened helper that runs winget via `Start-Process -Wait` (clean process context) with output redirected to files, `--disable-interactivity` to forbid prompts, a 600-second timeout so a stuck winget reports an error instead of hanging forever, captured output streamed into the log, and exit-code checking. Sunshine falls back to a direct `.exe` download if winget fails.
+
+### Still scaffolding
+
+A full streaming run (pair + stream a game) on Windows still hasn't been completed end-to-end. rc3 fixes the install-time crash + hang; the post-install streaming path remains unverified.
+
 ## [0.1.0-windows-rc2] — Windows track + graphical installer
 
 Adds the WPF graphical installer on top of rc1's CLI. Still scaffolding-level — **untested on real Windows hardware**, but structurally validated (XAML well-formed + all named elements bound, PowerShell parses + passes PSScriptAnalyzer in CI).
