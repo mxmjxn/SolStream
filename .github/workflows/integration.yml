@@ -109,6 +109,40 @@ jobs:
             exit 1
           fi
 
+  wpf-xaml-validate:
+    name: WPF XAML is well-formed (Linux — no Windows needed)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Extract + validate XAML heredocs from PowerShell GUI scripts
+        run: |
+          python3 - <<'PY'
+          import re, sys, glob
+          import xml.dom.minidom as minidom
+          fail = 0
+          for path in glob.glob("windows/scripts/*.ps1"):
+              content = open(path).read()
+              # Find @' ... '@ blocks that contain <Window
+              for m in re.finditer(r"@'\n(.*?)\n'@", content, re.DOTALL):
+                  block = m.group(1)
+                  if "<Window" not in block:
+                      continue
+                  try:
+                      minidom.parseString(block)
+                      names = re.findall(r'x:Name="([^"]+)"', block)
+                      print(f"  OK {path}: well-formed XAML, {len(names)} named elements")
+                      if "x:Class" in block:
+                          print(f"  FAIL {path}: x:Class present, breaks code-behind-less load")
+                          fail = 1
+                  except Exception as e:
+                      print(f"  FAIL {path}: {e}")
+                      fail = 1
+          sys.exit(fail)
+          PY
+
   windows-scripts-syntax:
     name: PowerShell scripts syntax check
     runs-on: windows-latest
@@ -125,8 +159,8 @@ jobs:
             $issues | Format-Table -AutoSize
             throw "PSScriptAnalyzer found $($issues.Count) issue(s)"
           }
-          # Parse check on every .ps1
-          Get-ChildItem -Path windows/scripts -Filter *.ps1 | ForEach-Object {
+          # Parse check on every .ps1 AND .psm1
+          Get-ChildItem -Path windows/scripts -Include *.ps1,*.psm1 -Recurse | ForEach-Object {
             $errors = $null
             [System.Management.Automation.PSParser]::Tokenize(
               (Get-Content -Raw $_.FullName), [ref]$errors

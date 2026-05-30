@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Windows graphical installer (`Install-SolStream-GUI.ps1`).** WPF window with hardware detection, option pickers (NVENC preset, Steam path with Browse button, firewall + WireGuard toggles), and a live progress log. Runs the install in a background runspace so the window stays responsive; self-elevates if not started as Administrator. Install logic refactored into a shared `SolStreamInstall.psm1` module consumed by both the CLI (`Install-SolStream.ps1`) and the GUI — no duplicated logic. New CI job validates the WPF XAML as well-formed XML on Linux (no Windows runner needed). Still scaffolding-level: untested on real Windows hardware.
 - **"Quit current game" Sunshine tile + `solstream-game-shutdown.sh` script.** Tile appears in the Moonlight app grid alongside "Steam Big Picture." Selecting it finds the running game's reaper process, sends SIGTERM, waits 8 seconds, then SIGKILLs if needed. Steam Big Picture itself stays up. Primarily for mobile clients where the on-screen gamepad makes quitting from inside the game painful. Log at `/tmp/solstream-game-shutdown.log`.
 
 ## [0.1.0-windows-rc1] — Windows scaffolding release

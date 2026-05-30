@@ -11,15 +11,39 @@ From an elevated PowerShell prompt on a Windows 11 host with an NVIDIA GPU:
 git clone https://github.com/mxmjxn/SolStream.git C:\SolStream
 cd C:\SolStream\windows\scripts
 
-# 2. Run the installer (Administrator required)
+# 2a. GRAPHICAL installer (recommended — pick options in a window)
 Set-ExecutionPolicy -Scope Process Bypass
-.\Install-SolStream.ps1
+.\Install-SolStream-GUI.ps1
+
+# 2b. OR command-line installer
+.\Install-SolStream.ps1            # accepts -NvencPreset, -SteamPath,
+                                   # -SkipFirewall, -EnableWireGuard
 
 # 3. After install, run the doctor
 .\Test-SolStream.ps1
 ```
 
-That installs Sunshine, drops a tuned `sunshine.conf` + `apps.json` at `%APPDATA%\Sunshine\`, opens Windows Firewall for Sunshine's ports, and (optionally) installs WireGuard for Windows.
+Either installer installs Sunshine, drops a tuned `sunshine.conf` + `apps.json` at `%APPDATA%\Sunshine\`, opens Windows Firewall for Sunshine's ports, and (optionally) installs WireGuard for Windows.
+
+### Graphical installer
+
+`Install-SolStream-GUI.ps1` opens a WPF window that:
+
+- Shows detected hardware (GPU, driver, Sunshine status) and disables Install on non-NVIDIA hosts
+- Lets you pick NVENC preset, Steam executable path (with a Browse button), and toggle firewall rules + WireGuard
+- Runs the install in a background runspace so the window stays responsive, streaming progress into a log pane
+- Self-elevates (relaunches as Administrator) if you didn't start it elevated
+
+Both front-ends share their install logic via `SolStreamInstall.psm1` — there is no duplicated install code between the CLI and GUI.
+
+### Architecture
+
+```
+SolStreamInstall.psm1          <- all install logic (one source of truth)
+├── Install-SolStream.ps1      <- CLI front-end
+└── Install-SolStream-GUI.ps1  <- WPF GUI front-end
+Test-SolStream.ps1             <- health check ("doctor")
+```
 
 ## Why Windows is a separate, smaller track
 
@@ -43,13 +67,16 @@ About 80% of the Linux installer's value is "knowing how to get past these gotch
 
 ```
 windows/
-├── README.md                   This file
+├── README.md                       This file
+├── PSScriptAnalyzerSettings.psd1   Lint config (excludes Write-Host etc.)
 ├── scripts/
-│   ├── Install-SolStream.ps1   PowerShell installer
-│   └── Test-SolStream.ps1      Health-check script (Windows equivalent of `solstream doctor`)
+│   ├── SolStreamInstall.psm1       Shared install logic (one source of truth)
+│   ├── Install-SolStream.ps1       CLI front-end
+│   ├── Install-SolStream-GUI.ps1   WPF graphical front-end
+│   └── Test-SolStream.ps1          Health-check ("doctor")
 ├── winget-manifest/
-│   └── README.md               Plans for shipping via winget (not yet generated)
-└── docs/                       (Empty; will hold Windows-specific docs)
+│   └── README.md                   Plans for shipping via winget (not yet generated)
+└── docs/                           (Empty; will hold Windows-specific docs)
 ```
 
 ## What needs work
