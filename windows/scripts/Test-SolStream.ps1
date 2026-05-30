@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Windows equivalent of `solstream doctor` — health checks for a Windows
+    Windows equivalent of `solstream doctor` - health checks for a Windows
     SolStream install.
 
 .DESCRIPTION
@@ -32,12 +32,12 @@ function Add-Result {
     }
 }
 
-# ─── NVIDIA driver ──────────────────────────────────────────────────────
+# --- NVIDIA driver ------------------------------------------------------
 $gpu = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match "NVIDIA" } | Select-Object -First 1
 Add-Result "NVIDIA GPU" ($null -ne $gpu) ($gpu.Name -as [string])
 Add-Result "NVIDIA driver version" ($null -ne $gpu) ($gpu.DriverVersion -as [string])
 
-# ─── Sunshine ───────────────────────────────────────────────────────────
+# --- Sunshine -----------------------------------------------------------
 $sunshine = Get-Command sunshine.exe -ErrorAction SilentlyContinue
 Add-Result "Sunshine installed" ($null -ne $sunshine) ($sunshine.Source -as [string])
 
@@ -47,28 +47,28 @@ if ($svc) {
     Add-Result "SunshineService running" ($svc.Status -eq "Running") $svc.Status
 }
 
-# ─── Config files ───────────────────────────────────────────────────────
+# --- Config files -------------------------------------------------------
 $cfg = "$env:USERPROFILE\AppData\Roaming\Sunshine\sunshine.conf"
 Add-Result "sunshine.conf present" (Test-Path $cfg) $cfg
 
 $apps = "$env:USERPROFILE\AppData\Roaming\Sunshine\apps.json"
 Add-Result "apps.json present" (Test-Path $apps) $apps
 
-# ─── Ports listening ────────────────────────────────────────────────────
+# --- Ports listening ----------------------------------------------------
 $ports = @(47984, 47989, 47990, 48010)
 foreach ($port in $ports) {
     $listening = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     Add-Result "TCP port $port listening" ($null -ne $listening) ""
 }
 
-# ─── Firewall rules ─────────────────────────────────────────────────────
+# --- Firewall rules -----------------------------------------------------
 $rule = Get-NetFirewallRule -DisplayName "SolStream Sunshine TCP 47984" -ErrorAction SilentlyContinue
 Add-Result "Firewall rules present" ($null -ne $rule) ""
 
-# ─── Render summary ─────────────────────────────────────────────────────
-Write-Host "`n  ── SolStream doctor (Windows) ──`n" -ForegroundColor Cyan
+# --- Render summary -----------------------------------------------------
+Write-Host "`n  -- SolStream doctor (Windows) --`n" -ForegroundColor Cyan
 foreach ($r in $results) {
-    $mark = if ($r.OK) { "✓" } else { "✗" }
+    $mark = if ($r.OK) { "OK" } else { "X" }
     $color = if ($r.OK) { "Green" } else { "Red" }
     Write-Host ("    {0,-2}  {1,-30}  {2}" -f $mark, $r.Name, $r.Detail) -ForegroundColor $color
 }

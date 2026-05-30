@@ -6,7 +6,7 @@
 
 .DESCRIPTION
     Thin CLI wrapper over SolStreamInstall.psm1. For a graphical wizard,
-    use Install-SolStream-GUI.ps1 instead — both share the same module.
+    use Install-SolStream-GUI.ps1 instead - both share the same module.
 
 .PARAMETER NvencPreset
     NVENC preset 1-7 (P1 slowest/best quality .. P7 fastest). Default 4.

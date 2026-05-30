@@ -17,7 +17,7 @@
 
 Set-StrictMode -Version Latest
 
-# Default logger — callers override with their own scriptblock.
+# Default logger - callers override with their own scriptblock.
 $script:DefaultLogger = { param($Message, $Level = 'info') Write-Host $Message }
 
 function Write-SolStreamLog {
@@ -66,6 +66,68 @@ function Get-SolStreamHardware {
     }
 }
 
+function Invoke-SolStreamWinget {
+    <#
+    .SYNOPSIS
+        Run a winget install robustly from automation / a runspace.
+    .DESCRIPTION
+        Calling winget directly inside a background runspace can hang
+        indefinitely because the runspace has no console/stdin for winget's
+        interactive elements. We instead launch winget via Start-Process
+        with output redirected to temp files (clean process context),
+        --disable-interactivity to forbid prompts, and a timeout so a stuck
+        winget surfaces an error instead of hanging the installer forever.
+    .OUTPUTS
+        $true on success (exit 0), $false otherwise.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PackageId,
+        [int]$TimeoutSeconds = 600,
+        [scriptblock]$Log
+    )
+
+    $wingetArgs = @(
+        'install', '--id', $PackageId, '--exact',
+        '--silent',
+        '--accept-package-agreements',
+        '--accept-source-agreements',
+        '--disable-interactivity'
+    )
+    $outFile = Join-Path $env:TEMP "solstream-winget-out-$PackageId.txt"
+    $errFile = Join-Path $env:TEMP "solstream-winget-err-$PackageId.txt"
+
+    Write-SolStreamLog "Running: winget $($wingetArgs -join ' ')" 'info' -Log $Log
+    Write-SolStreamLog 'This can take several minutes with no per-file progress shown here.' 'info' -Log $Log
+
+    $proc = Start-Process -FilePath 'winget' -ArgumentList $wingetArgs `
+        -NoNewWindow -PassThru `
+        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+
+    if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
+        try { $proc.Kill() } catch { }
+        Write-SolStreamLog "winget timed out after ${TimeoutSeconds}s installing $PackageId." 'error' -Log $Log
+        return $false
+    }
+
+    # Surface the captured output into the log
+    foreach ($f in @($outFile, $errFile)) {
+        if (Test-Path $f) {
+            Get-Content $f | Where-Object { $_ -and $_.Trim() } | ForEach-Object {
+                Write-SolStreamLog "  winget: $_" 'info' -Log $Log
+            }
+            Remove-Item $f -ErrorAction SilentlyContinue
+        }
+    }
+
+    if ($proc.ExitCode -eq 0) {
+        Write-SolStreamLog "$PackageId installed via winget." 'ok' -Log $Log
+        return $true
+    }
+    Write-SolStreamLog "winget exited $($proc.ExitCode) installing $PackageId." 'error' -Log $Log
+    return $false
+}
+
 function Install-SolStreamSunshine {
     [CmdletBinding()]
     param([scriptblock]$Log)
@@ -75,13 +137,14 @@ function Install-SolStreamSunshine {
         return
     }
 
+    $wingetOk = $false
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-SolStreamLog 'Installing Sunshine via winget...' 'info' -Log $Log
-        winget install --silent --accept-package-agreements --accept-source-agreements LizardByte.Sunshine
-        Write-SolStreamLog 'Sunshine installed via winget.' 'ok' -Log $Log
+        $wingetOk = Invoke-SolStreamWinget -PackageId 'LizardByte.Sunshine' -Log $Log
     }
-    else {
-        Write-SolStreamLog 'winget unavailable; downloading Sunshine installer directly...' 'warn' -Log $Log
+
+    if (-not $wingetOk) {
+        Write-SolStreamLog 'Falling back to direct .exe download from GitHub...' 'warn' -Log $Log
         $url = 'https://github.com/LizardByte/Sunshine/releases/latest/download/Sunshine-Windows-AMD64-installer.exe'
         $tmp = Join-Path $env:TEMP 'Sunshine-installer.exe'
         Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
@@ -130,7 +193,7 @@ min_log_level = info
     $conf | Out-File -FilePath $confPath -Encoding utf8 -Force
     Write-SolStreamLog "Wrote $confPath" 'ok' -Log $Log
 
-    # apps.json — escape backslashes in the Steam path for JSON
+    # apps.json - escape backslashes in the Steam path for JSON
     $steamJson = $SteamPath -replace '\\', '\\'
     $apps = @"
 {
@@ -199,8 +262,9 @@ function Install-SolStreamWireGuard {
     }
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-SolStreamLog 'Installing WireGuard via winget...' 'info' -Log $Log
-        winget install --silent --accept-package-agreements WireGuard.WireGuard
-        Write-SolStreamLog 'WireGuard installed.' 'ok' -Log $Log
+        if (-not (Invoke-SolStreamWinget -PackageId 'WireGuard.WireGuard' -Log $Log)) {
+            Write-SolStreamLog 'WireGuard install failed; get it manually from https://www.wireguard.com/install/' 'warn' -Log $Log
+        }
     }
     else {
         Write-SolStreamLog 'winget unavailable; install WireGuard manually from https://www.wireguard.com/install/' 'warn' -Log $Log

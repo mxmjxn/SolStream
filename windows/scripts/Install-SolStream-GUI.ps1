@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    SolStream Windows installer — graphical (WPF) front-end.
+    SolStream Windows installer - graphical (WPF) front-end.
 
 .DESCRIPTION
     A windowed install wizard. Detects hardware, lets you pick stream
@@ -26,7 +26,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 
-# ─── Self-elevate if not Administrator ──────────────────────────────────
+# --- Self-elevate if not Administrator ----------------------------------
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object Security.Principal.WindowsPrincipal($id)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -43,7 +43,7 @@ Add-Type -AssemblyName WindowsBase
 $modulePath = Join-Path $PSScriptRoot 'SolStreamInstall.psm1'
 Import-Module $modulePath -Force
 
-# ─── XAML window definition ─────────────────────────────────────────────
+# --- XAML window definition ---------------------------------------------
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -154,7 +154,7 @@ foreach ($name in 'HwGpu', 'HwDriver', 'HwSunshine', 'HwWarning', 'CmbPreset',
     $ctl[$name] = $window.FindName($name)
 }
 
-# ─── Populate hardware panel ────────────────────────────────────────────
+# --- Populate hardware panel --------------------------------------------
 $hw = Get-SolStreamHardware
 $ctl.HwGpu.Text = "GPU: $($hw.GpuModel)"
 $ctl.HwDriver.Text = if ($hw.DriverVersion) { "Driver: $($hw.DriverVersion)" } else { 'Driver: (none)' }
@@ -165,14 +165,14 @@ if (-not $hw.HasNvidia) {
     $ctl.BtnInstall.IsEnabled = $false
 }
 
-# ─── Shared state between UI thread and install runspace ────────────────
+# --- Shared state between UI thread and install runspace ----------------
 $sync = [hashtable]::Synchronized(@{
         Lines  = New-Object System.Collections.ArrayList
         Done   = $false
         Failed = $false
     })
 
-# ─── Browse button ──────────────────────────────────────────────────────
+# --- Browse button ------------------------------------------------------
 $ctl.BtnBrowse.Add_Click({
         $dlg = New-Object Microsoft.Win32.OpenFileDialog
         $dlg.Filter = 'Steam executable|Steam.exe|All executables|*.exe'
@@ -182,7 +182,7 @@ $ctl.BtnBrowse.Add_Click({
         }
     })
 
-# ─── Install button ─────────────────────────────────────────────────────
+# --- Install button -----------------------------------------------------
 $ctl.BtnInstall.Add_Click({
         $ctl.BtnInstall.IsEnabled = $false
         $ctl.StatusText.Text = 'Installing...'
@@ -247,7 +247,7 @@ $ctl.BtnInstall.Add_Click({
                 if ($sync.Done) {
                     $timer.Stop()
                     if ($sync.Failed) {
-                        $ctl.StatusText.Text = 'Install FAILED — see log'
+                        $ctl.StatusText.Text = 'Install FAILED - see log'
                         $ctl.StatusText.Foreground = '#F85149'
                         $ctl.BtnInstall.IsEnabled = $true
                     }
@@ -263,5 +263,5 @@ $ctl.BtnInstall.Add_Click({
         $timer.Start()
     })
 
-# ─── Show ───────────────────────────────────────────────────────────────
+# --- Show ---------------------------------------------------------------
 $window.ShowDialog() | Out-Null

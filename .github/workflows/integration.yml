@@ -109,6 +109,28 @@ jobs:
             exit 1
           fi
 
+  windows-scripts-ascii-only:
+    name: Windows PowerShell scripts are pure ASCII (PS 5.1 safety)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail on any non-ASCII byte in windows/scripts
+        run: |
+          # Windows PowerShell 5.1 reads BOM-less UTF-8 as Windows-1252,
+          # mangling non-ASCII into mojibake and breaking the parser. Keep
+          # these scripts pure ASCII so they work on every Windows shell.
+          fail=0
+          for f in windows/scripts/*.ps1 windows/scripts/*.psm1; do
+            if LC_ALL=C grep -nP '[^\x00-\x7F]' "$f" >/dev/null 2>&1; then
+              echo "  FAIL $f contains non-ASCII bytes:"
+              LC_ALL=C grep -nP '[^\x00-\x7F]' "$f" | head
+              fail=1
+            else
+              echo "  ok   $f is pure ASCII"
+            fi
+          done
+          exit $fail
+
   wpf-xaml-validate:
     name: WPF XAML is well-formed (Linux — no Windows needed)
     runs-on: ubuntu-24.04
