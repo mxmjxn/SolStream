@@ -190,40 +190,38 @@ fec_percentage = $FecPercentage
 min_log_level = info
 "@
     $confPath = Join-Path $cfgDir 'sunshine.conf'
-    $conf | Out-File -FilePath $confPath -Encoding utf8 -Force
+    # Use ASCII (no BOM). PS 5.1's `-Encoding utf8` emits a BOM, which some
+    # JSON/config parsers reject. Content here is all ASCII anyway.
+    $conf | Out-File -FilePath $confPath -Encoding ascii -Force
     Write-SolStreamLog "Wrote $confPath" 'ok' -Log $Log
 
-    # apps.json - escape backslashes in the Steam path for JSON
-    $steamJson = $SteamPath -replace '\\', '\\'
-    $apps = @"
-{
-  "env": {},
-  "apps": [
-    {
-      "name": "Steam Big Picture",
-      "cmd": [
-        "$steamJson",
-        "steam://open/bigpicture"
-      ],
-      "auto-detach": "true",
-      "wait-all": "false",
-      "exit-timeout": "5"
-    },
-    {
-      "name": "Quit current game",
-      "cmd": [
-        "powershell", "-NoProfile", "-Command",
-        "Get-Process | Where-Object { \$_.MainWindowTitle -and \$_.Path -like '*steamapps*' } | Stop-Process -Force"
-      ],
-      "auto-detach": "false",
-      "wait-all": "true",
-      "exit-timeout": "10"
+    # Build apps.json with ConvertTo-Json rather than hand-written text.
+    # This auto-escapes the Steam path's backslashes and removes all the
+    # string-escaping landmines (notably $_ in the quit-game command, which
+    # must stay LITERAL - a single-quoted string guarantees no interpolation).
+    $quitCmd = 'Get-Process | Where-Object { $_.Path -like ''*steamapps*'' } | Stop-Process -Force'
+
+    $appsObj = [ordered]@{
+        env  = [ordered]@{}
+        apps = @(
+            [ordered]@{
+                name           = 'Steam Big Picture'
+                cmd            = @($SteamPath, 'steam://open/bigpicture')
+                'auto-detach'  = 'true'
+                'wait-all'     = 'false'
+                'exit-timeout' = '5'
+            },
+            [ordered]@{
+                name           = 'Quit current game'
+                cmd            = @('powershell', '-NoProfile', '-Command', $quitCmd)
+                'auto-detach'  = 'false'
+                'wait-all'     = 'true'
+                'exit-timeout' = '10'
+            }
+        )
     }
-  ]
-}
-"@
     $appsPath = Join-Path $cfgDir 'apps.json'
-    $apps | Out-File -FilePath $appsPath -Encoding utf8 -Force
+    $appsObj | ConvertTo-Json -Depth 6 | Out-File -FilePath $appsPath -Encoding ascii -Force
     Write-SolStreamLog "Wrote $appsPath" 'ok' -Log $Log
 }
 
