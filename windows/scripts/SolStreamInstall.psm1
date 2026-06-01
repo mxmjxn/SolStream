@@ -154,10 +154,54 @@ function Install-SolStreamSunshine {
     }
 }
 
+function Get-SolStreamSunshineConfigDir {
+    <#
+    .SYNOPSIS
+        Find the directory Sunshine actually reads its config from.
+    .DESCRIPTION
+        On Windows, Sunshine installed as a service reads from
+        <install>\config\, NOT %APPDATA%. Discover it from the running
+        process, then the command, then the service binary, then the
+        default install path.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $exe = $null
+    $proc = Get-Process sunshine -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($proc -and $proc.Path) { $exe = $proc.Path }
+    if (-not $exe) {
+        $cmd = Get-Command sunshine.exe -ErrorAction SilentlyContinue
+        if ($cmd) { $exe = $cmd.Source }
+    }
+    if ($exe) {
+        $dir = Join-Path (Split-Path $exe -Parent) 'config'
+        if (Test-Path $dir) { return $dir }
+    }
+
+    $svc = Get-CimInstance Win32_Service -Filter "Name='SunshineService'" -ErrorAction SilentlyContinue
+    if ($svc -and $svc.PathName) {
+        $binPath = $svc.PathName.Trim('"')
+        # ...\tools\sunshinesvc.exe -> install root -> \config
+        $root = Split-Path (Split-Path $binPath -Parent) -Parent
+        $dir = Join-Path $root 'config'
+        if (Test-Path $dir) { return $dir }
+    }
+
+    $default = 'C:\Program Files\Sunshine\config'
+    if (Test-Path $default) { return $default }
+    return $null
+}
+
 function Set-SolStreamSunshineConfig {
     <#
     .SYNOPSIS
-        Write the tuned sunshine.conf + apps.json.
+        Apply tuning to Sunshine's real config dir (NOT %APPDATA%).
+    .DESCRIPTION
+        Merges our NVENC tuning into the existing sunshine.conf (preserving
+        any web-UI-set keys like the admin credentials), and writes apps.json
+        using Sunshine's native steam:// format so it doesn't depend on a
+        hardcoded Steam.exe path.
     #>
     [CmdletBinding()]
     param(
@@ -169,54 +213,56 @@ function Set-SolStreamSunshineConfig {
         [scriptblock]$Log
     )
 
-    $cfgDir = Join-Path $env:USERPROFILE 'AppData\Roaming\Sunshine'
-    $null = New-Item -ItemType Directory -Force -Path $cfgDir
+    $cfgDir = Get-SolStreamSunshineConfigDir
+    if (-not $cfgDir) {
+        Write-SolStreamLog 'Could not locate Sunshine config dir; is Sunshine installed? Skipping config.' 'warn' -Log $Log
+        return
+    }
+    Write-SolStreamLog "Sunshine config dir: $cfgDir" 'info' -Log $Log
 
-    $conf = @"
-# SolStream Windows-tuned Sunshine config
-
-origin_web_ui_allowed = lan
-address_family = both
-
-encoder = nvenc
-nvenc_preset = $NvencPreset
-nvenc_twopass = disabled
-nvenc_realtime_hags = enabled
-hevc_mode = $HevcMode
-
-min_threads = $MinThreads
-fec_percentage = $FecPercentage
-
-min_log_level = info
-"@
+    # --- sunshine.conf: merge our tuning, preserve everything else ---
     $confPath = Join-Path $cfgDir 'sunshine.conf'
-    # Use ASCII (no BOM). PS 5.1's `-Encoding utf8` emits a BOM, which some
-    # JSON/config parsers reject. Content here is all ASCII anyway.
-    $conf | Out-File -FilePath $confPath -Encoding ascii -Force
-    Write-SolStreamLog "Wrote $confPath" 'ok' -Log $Log
+    $settings = [ordered]@{}
+    if (Test-Path $confPath) {
+        foreach ($line in Get-Content $confPath) {
+            if ($line -match '^\s*([^#=]+?)\s*=\s*(.*)$') {
+                $settings[$matches[1].Trim()] = $matches[2].Trim()
+            }
+        }
+    }
+    $settings['encoder'] = 'nvenc'
+    $settings['nvenc_preset'] = "$NvencPreset"
+    $settings['nvenc_twopass'] = 'disabled'
+    $settings['nvenc_realtime_hags'] = 'enabled'
+    $settings['hevc_mode'] = "$HevcMode"
+    $settings['min_threads'] = "$MinThreads"
+    $settings['fec_percentage'] = "$FecPercentage"
+    $settings['origin_web_ui_allowed'] = 'lan'
+    $confLines = $settings.GetEnumerator() | ForEach-Object { "$($_.Key) = $($_.Value)" }
+    Set-Content -Path $confPath -Value $confLines -Encoding ascii -Force
+    Write-SolStreamLog "Applied tuning to $confPath" 'ok' -Log $Log
 
-    # Build apps.json with ConvertTo-Json rather than hand-written text.
-    # This auto-escapes the Steam path's backslashes and removes all the
-    # string-escaping landmines (notably $_ in the quit-game command, which
-    # must stay LITERAL - a single-quoted string guarantees no interpolation).
+    # --- apps.json: Desktop + Steam Big Picture (steam:// url) + Quit game ---
+    # Use Sunshine's native steam:// format (no hardcoded Steam.exe path).
+    # $_ in the quit cmd stays literal via the single-quoted string.
     $quitCmd = 'Get-Process | Where-Object { $_.Path -like ''*steamapps*'' } | Stop-Process -Force'
-
     $appsObj = [ordered]@{
         env  = [ordered]@{}
         apps = @(
+            [ordered]@{ name = 'Desktop'; 'image-path' = 'desktop.png' },
             [ordered]@{
-                name           = 'Steam Big Picture'
-                cmd            = @($SteamPath, 'steam://open/bigpicture')
-                'auto-detach'  = 'true'
-                'wait-all'     = 'false'
-                'exit-timeout' = '5'
+                name          = 'Steam Big Picture'
+                cmd           = 'steam://open/bigpicture'
+                'prep-cmd'    = @([ordered]@{ do = ''; undo = 'steam://close/bigpicture' })
+                'auto-detach' = $true
+                'wait-all'    = $true
+                'image-path'  = 'steam.png'
             },
             [ordered]@{
-                name           = 'Quit current game'
-                cmd            = @('powershell', '-NoProfile', '-Command', $quitCmd)
-                'auto-detach'  = 'false'
-                'wait-all'     = 'true'
-                'exit-timeout' = '10'
+                name          = 'Quit current game'
+                cmd           = @('powershell', '-NoProfile', '-Command', $quitCmd)
+                'auto-detach' = $false
+                'wait-all'    = $true
             }
         )
     }
@@ -370,8 +416,15 @@ function Start-SolStreamSunshineService {
     if ($svc) {
         # Ensure it survives reboots
         Set-Service -Name SunshineService -StartupType Automatic -ErrorAction SilentlyContinue
-        if ($svc.Status -ne 'Running') { Start-Service -Name SunshineService }
-        Write-SolStreamLog 'Sunshine service is running (startup: Automatic).' 'ok' -Log $Log
+        if ($svc.Status -eq 'Running') {
+            # Restart so the freshly-written sunshine.conf is re-read.
+            Restart-Service -Name SunshineService -Force
+            Write-SolStreamLog 'Sunshine service restarted to load new config (startup: Automatic).' 'ok' -Log $Log
+        }
+        else {
+            Start-Service -Name SunshineService
+            Write-SolStreamLog 'Sunshine service started (startup: Automatic).' 'ok' -Log $Log
+        }
     }
     else {
         Write-SolStreamLog 'Sunshine service not registered yet. Launch Sunshine.exe once to install it.' 'warn' -Log $Log
@@ -430,6 +483,7 @@ function Invoke-SolStreamInstall {
 
 Export-ModuleMember -Function `
     Get-SolStreamHardware, `
+    Get-SolStreamSunshineConfigDir, `
     Install-SolStreamSunshine, `
     Install-SolStreamSteam, `
     Install-SolStreamVirtualDisplay, `
