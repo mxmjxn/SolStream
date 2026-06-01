@@ -35,7 +35,9 @@ param(
     [ValidateRange(1, 7)][int]$NvencPreset = 4,
     [string]$SteamPath = 'C:\Program Files (x86)\Steam\Steam.exe',
     [switch]$SkipFirewall,
-    [switch]$EnableWireGuard
+    [switch]$EnableWireGuard,
+    [switch]$SkipSteam,
+    [switch]$InstallVirtualDisplay
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,6 +81,8 @@ try {
         -SteamPath $SteamPath `
         -EnableFirewall (-not $SkipFirewall) `
         -EnableWireGuard ([bool]$EnableWireGuard) `
+        -InstallSteam (-not $SkipSteam) `
+        -InstallVirtualDisplay ([bool]$InstallVirtualDisplay) `
         -Log $consoleLogger
 
     Write-Host "`n  Done. Next steps:" -ForegroundColor Cyan

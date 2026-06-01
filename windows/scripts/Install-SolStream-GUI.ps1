@@ -47,7 +47,7 @@ Import-Module $modulePath -Force
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SolStream Installer" Height="680" Width="560"
+        Title="SolStream Installer" Height="740" Width="560"
         WindowStartupLocation="CenterScreen"
         Background="#0F1419">
   <Grid Margin="18">
@@ -112,9 +112,13 @@ Import-Module $modulePath -Force
           <Button x:Name="BtnBrowse" Grid.Column="1" Content="Browse..." Margin="6,0,0,0" Padding="10,2"/>
         </Grid>
 
-        <CheckBox x:Name="ChkFirewall" Content="Add Windows Firewall rules for Sunshine"
+        <CheckBox x:Name="ChkSteam" Content="Install Steam if not already present"
                   Foreground="#E6EDF3" Margin="0,10,0,0" IsChecked="True"/>
+        <CheckBox x:Name="ChkFirewall" Content="Add Windows Firewall rules for Sunshine"
+                  Foreground="#E6EDF3" Margin="0,6,0,0" IsChecked="True"/>
         <CheckBox x:Name="ChkWireGuard" Content="Install WireGuard for remote streaming"
+                  Foreground="#E6EDF3" Margin="0,6,0,0"/>
+        <CheckBox x:Name="ChkVirtualDisplay" Content="Install virtual display driver (for headless / no monitor)"
                   Foreground="#E6EDF3" Margin="0,6,0,0"/>
       </StackPanel>
     </Border>
@@ -149,8 +153,8 @@ $window = [Windows.Markup.XamlReader]::Load($reader)
 # Bind named controls
 $ctl = @{}
 foreach ($name in 'HwGpu', 'HwDriver', 'HwSunshine', 'HwWarning', 'CmbPreset',
-    'TxtSteamPath', 'BtnBrowse', 'ChkFirewall', 'ChkWireGuard', 'TxtLog',
-    'LogScroll', 'StatusText', 'BtnInstall') {
+    'TxtSteamPath', 'BtnBrowse', 'ChkSteam', 'ChkFirewall', 'ChkWireGuard',
+    'ChkVirtualDisplay', 'TxtLog', 'LogScroll', 'StatusText', 'BtnInstall') {
     $ctl[$name] = $window.FindName($name)
 }
 
@@ -202,11 +206,13 @@ $ctl.BtnInstall.Add_Click({
         $preset = $presetMap[$ctl.CmbPreset.SelectedIndex]
 
         $opts = @{
-            NvencPreset     = $preset
-            SteamPath       = $ctl.TxtSteamPath.Text
-            EnableFirewall  = [bool]$ctl.ChkFirewall.IsChecked
-            EnableWireGuard = [bool]$ctl.ChkWireGuard.IsChecked
-            ModulePath      = $modulePath
+            NvencPreset           = $preset
+            SteamPath             = $ctl.TxtSteamPath.Text
+            EnableFirewall        = [bool]$ctl.ChkFirewall.IsChecked
+            EnableWireGuard       = [bool]$ctl.ChkWireGuard.IsChecked
+            InstallSteam          = [bool]$ctl.ChkSteam.IsChecked
+            InstallVirtualDisplay = [bool]$ctl.ChkVirtualDisplay.IsChecked
+            ModulePath            = $modulePath
         }
 
         # Build a runspace that runs the install, logging into $sync.Lines
@@ -231,6 +237,8 @@ $ctl.BtnInstall.Add_Click({
                         -SteamPath $opts.SteamPath `
                         -EnableFirewall $opts.EnableFirewall `
                         -EnableWireGuard $opts.EnableWireGuard `
+                        -InstallSteam $opts.InstallSteam `
+                        -InstallVirtualDisplay $opts.InstallVirtualDisplay `
                         -Log $logger
                 }
                 catch {

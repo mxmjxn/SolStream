@@ -269,14 +269,109 @@ function Install-SolStreamWireGuard {
     }
 }
 
+function Install-SolStreamSteam {
+    <#
+    .SYNOPSIS
+        Install Steam via winget if it isn't already present.
+    .OUTPUTS
+        The resolved Steam.exe path (existing or freshly installed).
+    #>
+    [CmdletBinding()]
+    param([scriptblock]$Log)
+
+    $defaultPath = 'C:\Program Files (x86)\Steam\Steam.exe'
+    if (Test-Path $defaultPath) {
+        Write-SolStreamLog 'Steam already installed.' 'ok' -Log $Log
+        return $defaultPath
+    }
+    # Maybe it's installed elsewhere - check the registry
+    $reg = Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Valve\Steam' -ErrorAction SilentlyContinue
+    if ($reg -and $reg.InstallPath -and (Test-Path (Join-Path $reg.InstallPath 'Steam.exe'))) {
+        $p = Join-Path $reg.InstallPath 'Steam.exe'
+        Write-SolStreamLog "Steam already installed at $p" 'ok' -Log $Log
+        return $p
+    }
+
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-SolStreamLog 'Installing Steam via winget...' 'info' -Log $Log
+        if (Invoke-SolStreamWinget -PackageId 'Valve.Steam' -Log $Log) {
+            return $defaultPath
+        }
+    }
+    Write-SolStreamLog 'Could not install Steam automatically. Install it from https://store.steampowered.com and re-run.' 'warn' -Log $Log
+    return $defaultPath
+}
+
+function Install-SolStreamVirtualDisplay {
+    <#
+    .SYNOPSIS
+        Install a virtual display driver so a fully headless host (no monitor)
+        has a display surface for Sunshine to capture.
+    .DESCRIPTION
+        Uses the community Virtual-Display-Driver (an IDD-based virtual
+        monitor). Skips if a virtual display is already present. This is the
+        Windows analogue of the synthetic-EDID work on the Linux side.
+
+        EXPERIMENTAL: installs a third-party kernel display driver. Only needed
+        on truly headless boxes; machines with a real monitor or an HDMI dummy
+        plug don't need it.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$ReleaseUrl = 'https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/latest/download/Virtual.Display.Driver-x64.zip',
+        [scriptblock]$Log
+    )
+
+    $existing = Get-PnpDevice -Class Display -ErrorAction SilentlyContinue |
+        Where-Object { $_.FriendlyName -match 'Virtual Display|IddSample|MTT|Idd' }
+    if ($existing) {
+        Write-SolStreamLog 'Virtual display driver already present.' 'ok' -Log $Log
+        return
+    }
+
+    Write-SolStreamLog 'Installing virtual display driver (headless display surface)...' 'info' -Log $Log
+    $work = Join-Path $env:TEMP 'solstream-vdd'
+    $zip = Join-Path $env:TEMP 'solstream-vdd.zip'
+    try {
+        New-Item -ItemType Directory -Force -Path $work | Out-Null
+        Invoke-WebRequest -Uri $ReleaseUrl -OutFile $zip -UseBasicParsing
+        Expand-Archive -Path $zip -DestinationPath $work -Force
+
+        $inf = Get-ChildItem -Path $work -Recurse -Filter '*.inf' | Select-Object -First 1
+        if (-not $inf) {
+            Write-SolStreamLog 'Virtual display package had no .inf; skipping. Install manually if you need headless.' 'warn' -Log $Log
+            return
+        }
+        # Trust the driver's catalog cert so pnputil can install it unattended
+        $cert = Get-ChildItem -Path $work -Recurse -Filter '*.cer' | Select-Object -First 1
+        if ($cert) {
+            Import-Certificate -FilePath $cert.FullName -CertStoreLocation 'Cert:\LocalMachine\TrustedPublisher' | Out-Null
+            Import-Certificate -FilePath $cert.FullName -CertStoreLocation 'Cert:\LocalMachine\Root' | Out-Null
+        }
+        $result = pnputil /add-driver $inf.FullName /install 2>&1
+        Write-SolStreamLog "pnputil: $($result -join '; ')" 'info' -Log $Log
+        Write-SolStreamLog 'Virtual display driver installed. A reboot may be needed for it to enumerate.' 'ok' -Log $Log
+    }
+    catch {
+        Write-SolStreamLog "Virtual display install failed: $_" 'warn' -Log $Log
+        Write-SolStreamLog 'Headless capture will not work until a virtual display or dummy plug is present.' 'warn' -Log $Log
+    }
+    finally {
+        Remove-Item $zip -ErrorAction SilentlyContinue
+        Remove-Item $work -Recurse -ErrorAction SilentlyContinue
+    }
+}
+
 function Start-SolStreamSunshineService {
     [CmdletBinding()]
     param([scriptblock]$Log)
 
     $svc = Get-Service -Name SunshineService -ErrorAction SilentlyContinue
     if ($svc) {
+        # Ensure it survives reboots
+        Set-Service -Name SunshineService -StartupType Automatic -ErrorAction SilentlyContinue
         if ($svc.Status -ne 'Running') { Start-Service -Name SunshineService }
-        Write-SolStreamLog 'Sunshine service is running.' 'ok' -Log $Log
+        Write-SolStreamLog 'Sunshine service is running (startup: Automatic).' 'ok' -Log $Log
     }
     else {
         Write-SolStreamLog 'Sunshine service not registered yet. Launch Sunshine.exe once to install it.' 'warn' -Log $Log
@@ -294,6 +389,8 @@ function Invoke-SolStreamInstall {
         [string]$SteamPath = 'C:\Program Files (x86)\Steam\Steam.exe',
         [bool]$EnableFirewall = $true,
         [bool]$EnableWireGuard = $false,
+        [bool]$InstallSteam = $true,
+        [bool]$InstallVirtualDisplay = $false,
         [scriptblock]$Log
     )
 
@@ -307,18 +404,35 @@ function Invoke-SolStreamInstall {
     Write-SolStreamLog "GPU: $($hw.GpuModel) (driver $($hw.DriverVersion))" 'ok' -Log $Log
 
     Install-SolStreamSunshine -Log $Log
-    Set-SolStreamSunshineConfig -NvencPreset $NvencPreset -SteamPath $SteamPath -Log $Log
+
+    # Install Steam if requested; use the resolved path for apps.json so we
+    # don't hardcode a location that may not exist.
+    $resolvedSteam = $SteamPath
+    if ($InstallSteam) {
+        $resolvedSteam = Install-SolStreamSteam -Log $Log
+    }
+
+    if ($InstallVirtualDisplay) {
+        Install-SolStreamVirtualDisplay -Log $Log
+    }
+
+    Set-SolStreamSunshineConfig -NvencPreset $NvencPreset -SteamPath $resolvedSteam -Log $Log
     if ($EnableFirewall) { Add-SolStreamFirewallRules -Log $Log }
     if ($EnableWireGuard) { Install-SolStreamWireGuard -Log $Log }
     Start-SolStreamSunshineService -Log $Log
 
     Write-SolStreamLog 'Install complete.' 'ok' -Log $Log
     Write-SolStreamLog "Sunshine Web UI: https://$($hw.LanIp):47990" 'ok' -Log $Log
+    if (-not $InstallVirtualDisplay) {
+        Write-SolStreamLog 'Note: for a fully headless box (no monitor), re-run with the virtual-display option or attach an HDMI dummy plug.' 'info' -Log $Log
+    }
 }
 
 Export-ModuleMember -Function `
     Get-SolStreamHardware, `
     Install-SolStreamSunshine, `
+    Install-SolStreamSteam, `
+    Install-SolStreamVirtualDisplay, `
     Set-SolStreamSunshineConfig, `
     Add-SolStreamFirewallRules, `
     Install-SolStreamWireGuard, `
