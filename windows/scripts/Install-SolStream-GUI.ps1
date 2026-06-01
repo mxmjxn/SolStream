@@ -166,11 +166,21 @@ if (-not $hw.HasNvidia) {
 }
 
 # --- Shared state between UI thread and install runspace ----------------
+# Queue is a thread-safe ConcurrentQueue so the runspace can enqueue log
+# lines while the UI thread dequeues them with no locking or index races.
+# We also stash the runspace/powershell/handle/timer refs in here later,
+# because PowerShell event-handler scriptblocks run in SCRIPT scope and do
+# NOT close over the Add_Click block's locals.
 $sync = [hashtable]::Synchronized(@{
-        Lines  = New-Object System.Collections.ArrayList
+        Queue  = [System.Collections.Concurrent.ConcurrentQueue[string]]::new()
         Done   = $false
         Failed = $false
     })
+
+# Theme brushes (assigning a hex string to a WPF Brush property doesn't
+# auto-convert in code-behind, unlike XAML; build the brushes explicitly).
+$brushRed = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#F85149')
+$brushGreen = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#3FB950')
 
 # --- Browse button ------------------------------------------------------
 $ctl.BtnBrowse.Add_Click({
@@ -213,7 +223,7 @@ $ctl.BtnInstall.Add_Click({
                 Import-Module $opts.ModulePath -Force
                 $logger = {
                     param($Message, $Level = 'info')
-                    [void]$sync.Lines.Add("[$Level] $Message")
+                    $sync.Queue.Enqueue("[$Level] $Message")
                 }
                 try {
                     Invoke-SolStreamInstall `
@@ -224,40 +234,50 @@ $ctl.BtnInstall.Add_Click({
                         -Log $logger
                 }
                 catch {
-                    [void]$sync.Lines.Add("[error] $_")
+                    $sync.Queue.Enqueue("[error] $_")
                     $sync.Failed = $true
                 }
                 finally {
                     $sync.Done = $true
                 }
             })
-        $handle = $ps.BeginInvoke()
 
-        # DispatcherTimer drains log lines into the textbox + detects completion
-        $script:drained = 0
+        # Stash refs in $sync so the timer tick (which runs in SCRIPT scope
+        # and does not close over these Add_Click locals) can reach them.
+        $sync.Ps = $ps
+        $sync.Handle = $ps.BeginInvoke()
+        $sync.Rs = $rs
+
         $timer = New-Object System.Windows.Threading.DispatcherTimer
         $timer.Interval = [TimeSpan]::FromMilliseconds(200)
+        $sync.Timer = $timer
         $timer.Add_Tick({
-                while ($script:drained -lt $sync.Lines.Count) {
-                    $line = $sync.Lines[$script:drained]
-                    $ctl.TxtLog.AppendText("$line`r`n")
-                    $script:drained++
+                # Wrap in try/catch: a thrown exception in a DispatcherTimer
+                # tick stops subsequent ticks, which would freeze the log.
+                try {
+                    $line = $null
+                    while ($sync.Queue.TryDequeue([ref]$line)) {
+                        $ctl.TxtLog.AppendText("$line`r`n")
+                    }
+                    $ctl.LogScroll.ScrollToEnd()
+                    if ($sync.Done) {
+                        $sync.Timer.Stop()
+                        if ($sync.Failed) {
+                            $ctl.StatusText.Text = 'Install FAILED - see log'
+                            $ctl.StatusText.Foreground = $brushRed
+                            $ctl.BtnInstall.IsEnabled = $true
+                        }
+                        else {
+                            $ctl.StatusText.Text = 'Install complete'
+                            $ctl.StatusText.Foreground = $brushGreen
+                        }
+                        try { $sync.Ps.EndInvoke($sync.Handle) } catch { }
+                        $sync.Ps.Dispose()
+                        $sync.Rs.Close()
+                    }
                 }
-                $ctl.LogScroll.ScrollToEnd()
-                if ($sync.Done) {
-                    $timer.Stop()
-                    if ($sync.Failed) {
-                        $ctl.StatusText.Text = 'Install FAILED - see log'
-                        $ctl.StatusText.Foreground = '#F85149'
-                        $ctl.BtnInstall.IsEnabled = $true
-                    }
-                    else {
-                        $ctl.StatusText.Text = 'Install complete'
-                        $ctl.StatusText.Foreground = '#3FB950'
-                    }
-                    $ps.EndInvoke($handle)
-                    $ps.Dispose()
-                    $rs.Close()
+                catch {
+                    $ctl.TxtLog.AppendText("[gui] tick error: $_`r`n")
                 }
             })
         $timer.Start()
