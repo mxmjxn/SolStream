@@ -15,6 +15,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Windows graphical installer (`Install-SolStream-GUI.ps1`).** WPF window with hardware detection, option pickers (NVENC preset, Steam path with Browse button, firewall + WireGuard toggles), and a live progress log. Runs the install in a background runspace so the window stays responsive; self-elevates if not started as Administrator. Install logic refactored into a shared `SolStreamInstall.psm1` module consumed by both the CLI (`Install-SolStream.ps1`) and the GUI — no duplicated logic. New CI job validates the WPF XAML as well-formed XML on Linux (no Windows runner needed). Still scaffolding-level: untested on real Windows hardware.
 - **"Quit current game" Sunshine tile + `solstream-game-shutdown.sh` script.** Tile appears in the Moonlight app grid alongside "Steam Big Picture." Selecting it finds the running game's reaper process, sends SIGTERM, waits 8 seconds, then SIGKILLs if needed. Steam Big Picture itself stays up. Primarily for mobile clients where the on-screen gamepad makes quitting from inside the game painful. Log at `/tmp/solstream-game-shutdown.log`.
 
+## [0.1.0-windows-rc4] — GUI confirmed working + complete setup
+
+Debugged directly on real Windows 11 + RTX 5090 hardware via SSH. The GUI now works end-to-end, and the installer covers the full setup rather than just Sunshine.
+
+### Fixed
+
+- **apps.json generation crashed** with "The variable '$_' cannot be retrieved." The quit-game command escaped `$_` with a backslash, but PowerShell's escape char is the backtick, so `$_` was interpolated and (under `Set-StrictMode`) errored. Rebuilt apps.json with `ConvertTo-Json` from an object, which removes all string-escaping landmines and auto-escapes the Steam path. Also switched config writes from `-Encoding utf8` (which emits a BOM on PS 5.1 that can trip JSON parsers) to `-Encoding ascii`.
+- **GUI log pane froze after the first line.** Three compounding causes: (1) PowerShell event-handler scriptblocks run in script scope and don't close over the click-handler's locals, so `$timer.Stop()` hit `$null`; (2) `[hashtable]::Synchronized` doesn't make the inner `ArrayList` thread-safe, so the runspace's `.Add()` raced the UI thread's indexed reads; (3) `$ErrorActionPreference=Stop` made any such hiccup silently kill the timer. Fixed with a thread-safe `ConcurrentQueue`, stashing the runspace/timer refs in the script-scoped `$sync` hashtable, and wrapping the tick in try/catch.
+
+### Added
+
+- **Steam auto-install** via winget (`Valve.Steam`) when missing; the resolved path feeds `apps.json`. CLI on by default (`-SkipSteam` to opt out); GUI checkbox.
+- **Virtual display driver** (opt-in) for truly headless hosts — the Windows analogue of the Linux synthetic-EDID work. CLI `-InstallVirtualDisplay`; GUI checkbox. Default off. Experimental — code is in place but the install path is not yet exercised on hardware.
+- Sunshine service explicitly set to `Automatic` startup for reboot survival.
+
+### Verified on real hardware (RTX 5090, over SSH)
+
+- CLI install completes end-to-end; apps.json is valid JSON with no BOM
+- GUI window builds with all 15 controls; runspace + ConcurrentQueue drains all log lines with `Failed=False`
+- Steam detection returns the correct existing path
+
+The virtual-display install is the one path still unexercised on hardware (it changes display config; the test machine has a working monitor).
+
 ## [0.1.0-windows-rc3] — first real-hardware fixes
 
 First test on actual Windows 11 + RTX 5090 hardware. The GUI rendered correctly, detected the GPU + driver, and the options panel worked — but two bugs surfaced. Both fixed here.
